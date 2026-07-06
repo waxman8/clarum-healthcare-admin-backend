@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy import select
 
 from app.database import Base
-from app.models.auth import Scheme, User, AuditLog
+from app.models.auth import Scheme, User, AuditLog, SchemeTheme
 from app.models.reference import ICD10Code, TariffCode, RejectionCode, PlanOption, DisciplineCode
 from app.models.members import Member, Dependant, BenefitLimit, MemberStatusHistory
 from app.models.providers import Provider
@@ -184,6 +184,9 @@ async def seed_database():
         )
         db.add(scheme)
         await db.flush()
+
+        print("Creating scheme theme...")
+        db.add(SchemeTheme(scheme_id=scheme.id, palette="indigo"))
 
         print("Creating plan options...")
         plan_hospital = PlanOption(

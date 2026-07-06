@@ -87,9 +87,9 @@ The platform uses a relational data model designed for CMS (Council for Medical 
    Create tables and seed schemes (**Only required once** after cloning):
    ```bash
    alembic upgrade head
-   python scripts/seed.py        # Demo Health Medical Scheme (DHMS)
-   python scripts/seed_mdv.py    # MDV Health Medical Scheme (MDVH)
-   python scripts/seed_tpa.py    # Multi-Scheme TPA Admin
+   python scripts/seed.py
+   python scripts/seed_mdv.py
+   python scripts/seed_tpa.py
    ```
 
 3. **Start the API server**:

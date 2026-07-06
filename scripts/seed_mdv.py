@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database import Base, engine, AsyncSessionLocal
-from app.models.auth import Scheme, User, AuditLog
+from app.models.auth import Scheme, User, AuditLog, SchemeTheme
 from app.models.reference import ICD10Code, TariffCode, RejectionCode, PlanOption
 from app.models.members import Member, Dependant, BenefitLimit, MemberStatusHistory
 from app.models.providers import Provider
@@ -108,6 +108,9 @@ async def seed_mdv():
         )
         db.add(scheme)
         await db.flush()
+
+        print("Creating MDV theme configuration...")
+        db.add(SchemeTheme(scheme_id=scheme.id, palette="teal"))
 
         print("Creating MDV plan options (mining/industrial sector focus)...")
         plan_core = PlanOption(
