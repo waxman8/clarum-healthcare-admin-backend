@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.dev_env
+.venv
+env/
+venv/
+ENV/
+
+# Databases
+*.db
+*.sqlite3
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Vercel
+.vercel
+
+# Operating System
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Medshield (Excluded from source control)
+scripts/seed_medshield.py
