@@ -46,7 +46,13 @@ def _run_migrations() -> None:
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(_migrate)
-        future.result()  # blocks until done, re-raises any exception
+        try:
+            # Wait for migrations with a timeout to prevent indefinite hang
+            future.result(timeout=60)
+        except concurrent.futures.TimeoutError:
+            logger.error("Migrations timed out after 60 seconds.")
+            # We don't raise here so the app can at least try to start,
+            # though it might fail later if tables are missing.
 
 
 @asynccontextmanager

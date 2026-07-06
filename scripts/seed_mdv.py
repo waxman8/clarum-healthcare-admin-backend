@@ -154,10 +154,10 @@ async def seed_mdv():
 
         print("Creating MDV users...")
         users_data = [
-            ("admin@mdvhealth.co.za", "MDV Admin", "super_admin"),
+            ("superadmin@mdvhealth.co.za", "MDV Super Admin", "super_admin"),
             ("schemeadmin@mdvhealth.co.za", "MDV Scheme Administrator", "scheme_admin"),
-            ("claims@mdvhealth.co.za", "MDV Claims Processor", "claims_processor"),
-            ("auth@mdvhealth.co.za", "MDV Authorisation Officer", "authorisation_officer"),
+            ("claimsprocessor@mdvhealth.co.za", "MDV Claims Processor", "claims_processor"),
+            ("authorisationofficer@mdvhealth.co.za", "MDV Authorisation Officer", "authorisation_officer"),
             ("finance@mdvhealth.co.za", "MDV Finance Officer", "finance_officer"),
             ("callcentre@mdvhealth.co.za", "MDV Call Centre Agent", "call_centre_agent"),
         ]
@@ -166,7 +166,7 @@ async def seed_mdv():
             user = User(
                 email=email,
                 full_name=full_name,
-                hashed_password=get_password_hash("MDV@1234"),
+                hashed_password=get_password_hash("MDVH@1234"),
                 role=role,
                 is_active=True,
                 scheme_id=scheme.id,
@@ -558,11 +558,11 @@ async def seed_mdv():
         print("Plans:  Core Benefit (R1 420/mo) | Plus (R2 780/mo) | Premier (R4 800/mo)")
         print(f"Members: 30 ({len(active_members)} active)")
         print("Claims:  15  |  Authorisations: 9  |  Providers: 6")
-        print("\nLogin credentials (password: MDV@1234):")
-        print("  admin@mdvhealth.co.za       — super_admin")
+        print("\nLogin credentials (password: MDVH@1234):")
+        print("  superadmin@mdvhealth.co.za       — super_admin")
         print("  schemeadmin@mdvhealth.co.za — scheme_admin")
-        print("  claims@mdvhealth.co.za      — claims_processor")
-        print("  auth@mdvhealth.co.za        — authorisation_officer")
+        print("  claimsprocessor@mdvhealth.co.za      — claims_processor")
+        print("  authorisationofficer@mdvhealth.co.za        — authorisation_officer")
         print("  finance@mdvhealth.co.za     — finance_officer")
         print("  callcentre@mdvhealth.co.za  — call_centre_agent")
         print("\nData separation: MDV users see ONLY MDV members, claims and authorisations.")

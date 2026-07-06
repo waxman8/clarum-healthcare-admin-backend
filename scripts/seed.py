@@ -230,10 +230,10 @@ async def seed_database():
 
         print("Creating users...")
         users_data = [
-            ("admin@demohealth.co.za", "Admin User", "super_admin"),
+            ("superadmin@demohealth.co.za", "Super Admin", "super_admin"),
             ("schemeadmin@demohealth.co.za", "Scheme Administrator", "scheme_admin"),
-            ("claims@demohealth.co.za", "Claims Processor", "claims_processor"),
-            ("auth@demohealth.co.za", "Authorisation Officer", "authorisation_officer"),
+            ("claimsprocessor@demohealth.co.za", "Claims Processor", "claims_processor"),
+            ("authorisationofficer@demohealth.co.za", "Authorisation Officer", "authorisation_officer"),
             ("finance@demohealth.co.za", "Finance Officer", "finance_officer"),
             ("callcentre@demohealth.co.za", "Call Centre Agent", "call_centre_agent"),
         ]
@@ -242,7 +242,7 @@ async def seed_database():
             user = User(
                 email=email,
                 full_name=full_name,
-                hashed_password=get_password_hash("Demo@1234"),
+                hashed_password=get_password_hash("DHMS@1234"),
                 role=role,
                 is_active=True,
                 scheme_id=scheme.id,

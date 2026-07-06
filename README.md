@@ -84,14 +84,16 @@ The platform uses a relational data model designed for CMS (Council for Medical 
    ```
 
 2. **Database Initialization**:
-   Create tables and seed schemes:
+   Create tables and seed schemes (**Only required once** after cloning):
    ```bash
    alembic upgrade head
    python scripts/seed.py        # Demo Health Medical Scheme (DHMS)
    python scripts/seed_mdv.py    # MDV Health Medical Scheme (MDVH)
+   python scripts/seed_tpa.py    # Multi-Scheme TPA Admin
    ```
 
 3. **Start the API server**:
+   After initialization, you can simply start the server for subsequent runs:
    ```bash
    uvicorn app.main:app --reload
    ```
@@ -143,6 +145,12 @@ pytest
 | Auth Officer | auth@mdvhealth.co.za | MDV@1234 |
 | Finance Officer | finance@mdvhealth.co.za | MDV@1234 |
 | Call Centre | callcentre@mdvhealth.co.za | MDV@1234 |
+
+### TPA Multi-Scheme Admin
+
+| Role | Email | Password |
+|------|-------|----------|
+| Super Admin | tpa@tpaadmin.co.za | TPA@1234 |
 
 ## 📊 Seed Data Overview
 
