@@ -1,6 +1,6 @@
 # SA Healthcare Administration Platform - Backend
 
-A comprehensive, multi-scheme healthcare administration backend built with FastAPI. This platform supports multiple medical schemes with full data isolation, role-based access control, and a sophisticated rule-based adjudication engine.
+A comprehensive, multi-scheme healthcare administration backend built with FastAPI. This platform supports multiple medical schemes with full data isolation, role-based access control, and plans for claims processing engines, contribution automation and whatever follows.
 
 ## 🏗️ System Architecture
 
