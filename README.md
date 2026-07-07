@@ -122,6 +122,47 @@ The platform includes a robust testing suite for the backend services and adjudi
 pytest
 ```
 
+## 🤝 Contributing
+
+We enforce a strict branching and merge policy to maintain code quality. Direct pushes to `main` are blocked.
+
+### Workflow
+1. **Branching**: Always create a new branch for your work.
+   - **Naming Convention**: Use category prefixes followed by a forward slash and a short, descriptive name in kebab-case.
+   - **Examples**: `feature/add-auth-logs`, `bugfix/fix-claim-validation`, `chore/update-dependencies`.
+2. **Pushing**: You can only push to your own feature branch.
+3. **Merging**: Submit a Pull Request (PR) for review to merge into `main`.
+
+### Example Git Commands
+```bash
+# 1. Create and switch to a new feature branch
+# Use category/kebab-case-description
+git checkout -b feature/your-feature-name
+
+# 2. Make your changes and commit them
+git add .
+git commit -m "Brief description of changes"
+
+# 3. Push your branch to the repository
+git push origin feature/your-feature-name
+
+# 4. Create a Pull Request (PR)
+
+#### Option A: Via GitHub Web UI (Recommended)
+1. Push your branch (Step 3 above).
+2. Open the repository on GitHub in your browser.
+3. Switch to your branch in the branches dropdown
+4. You should see a yellow highlight banner: **"feature/your-feature-name had recent pushes x minutes ago"**.
+5. Click the **[Compare & pull request]** button.
+6. Provide a clear title and description for your changes.
+7. Click **[Create pull request]**.
+
+#### Option B: Using the GitHub CLI
+```bash
+gh pr create --title "Brief description of changes" --body "Details about implementation"
+```
+```
+
 ## 🔐 Demo Credentials
 
 ### Demo Health Medical Scheme (DHMS)

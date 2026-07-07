@@ -10,5 +10,6 @@
       "src": "/(.*)",
       "dest": "app/main.py"
     }
-  ]
+  ],
+  "ignoreCommand": "if [ \"$VERCEL_GIT_COMMIT_REF\" != \"main\" ] && [ -z \"$VERCEL_GIT_PULL_REQUEST_ID\" ]; then exit 0; else exit 1; fi"
 }
