@@ -131,7 +131,7 @@ We enforce a strict branching and merge policy to maintain code quality. Direct 
    - **Naming Convention**: Use category prefixes followed by a forward slash and a short, descriptive name in kebab-case.
    - **Examples**: `feature/add-auth-logs`, `bugfix/fix-claim-validation`, `chore/update-dependencies`.
 2. **Pushing**: You can only push to your own feature branch.
-3. **Merging**: Submit a Pull Request (PR) for review to merge into `main`.
+3. **Merging**: Submit a Pull Request (PR) for review to merge into `main`. ONLY do this when you have a feature complete and have tested locally and it is ready to go to production. 
 
 ### Example Git Commands
 ```bash
