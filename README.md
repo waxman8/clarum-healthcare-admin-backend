@@ -151,10 +151,11 @@ git push origin feature/your-feature-name
 #### Option A: Via GitHub Web UI (Recommended)
 1. Push your branch (Step 3 above).
 2. Open the repository on GitHub in your browser.
-3. You should see a yellow highlight banner: **"feature/your-feature-name had recent pushes x minutes ago"**.
-4. Click the **[Compare & pull request]** button.
-5. Provide a clear title and description for your changes.
-6. Click **[Create pull request]**.
+3. Switch to your branch in the branches dropdown
+4. You should see a yellow highlight banner: **"feature/your-feature-name had recent pushes x minutes ago"**.
+5. Click the **[Compare & pull request]** button.
+6. Provide a clear title and description for your changes.
+7. Click **[Create pull request]**.
 
 #### Option B: Using the GitHub CLI
 ```bash
