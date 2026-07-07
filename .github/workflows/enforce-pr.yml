@@ -1,0 +1,15 @@
+name: Enforce Pull Requests
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  reject-direct-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Block Direct Commit
+        run: |
+          echo "FAIL: Direct commits to main are blocked!"
+          echo "Please create a new branch and open a Pull Request instead."
+          exit 1
