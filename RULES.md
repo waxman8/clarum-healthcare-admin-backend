@@ -14,6 +14,33 @@
 8. **All queries filter by `scheme_id`** via `_effective_scheme_id(current_user)`. No unscoped reads.
 9. **Seed data must be business-valid** — e.g. a PMB-flagged claim must reference a real PMB diagnosis code.
 
+I recommend creating a new heading called **`## Engineering Standards`** and placing it right after **`## Hard Constraints`**. 
+
+While some items (like async and type hints) are already mentioned in your **`## Style`** and **`## Testing`** sections, keeping this list as a unified set of "Engineering Standards" provides a high-level checklist for every PR.
+
+If you want to keep the document perfectly clean and avoid redundancy, here is how they fit into your existing structure:
+
+1.  **Hard Constraints:** Add "Manage secrets through environment variables" and "Pin dependencies/scan for vulnerabilities."
+2.  **Layers:** Add "Structure code by domain" and "Inject dependencies via FastAPI's Depends."
+3.  **Style:** Add "Follow PEP 8 with Ruff/Black," "Log structured JSON," and "Validate all inputs/outputs with Pydantic."
+4.  **Testing:** Add "Write pytest tests with high coverage."
+
+**My Recommendation:**
+Create the new heading. It's easier for the team to read a single block of high-level standards than to hunt for them across five different sections.
+
+## Engineering Standards
+
+- **Formatting:** Follow PEP 8 with Ruff or Black formatting.
+- **Type Safety:** Use type hints everywhere, enforced with mypy strict.
+- **Validation:** Validate all inputs and outputs using Pydantic models.
+- **Concurrency:** Prefer async endpoints and non-blocking I/O calls.
+- **Dependency Injection:** Inject dependencies via FastAPI's `Depends` system.
+- **Architecture:** Structure code by domain, not by file type.
+- **Security:** Manage secrets through environment variables; never commit them.
+- **Observability:** Log structured JSON with correlation IDs per request.
+- **Testing:** Write pytest tests with high coverage and fixtures.
+- **Supply Chain:** Pin dependencies and scan for vulnerabilities in CI.
+
 ## Layers
 
 `Router → Service → Repository → DB`. Nothing depends upward.
