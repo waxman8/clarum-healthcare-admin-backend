@@ -30,6 +30,7 @@ Thumbs.db
 # IDEs
 .vscode/
 .idea/
+.roo/
 
 # Medshield (Excluded from source control)
 scripts/seed_medshield.py
