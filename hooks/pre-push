@@ -1,0 +1,8 @@
+#!/bin/bash
+while read local_ref local_sha remote_ref remote_sha; do
+  if [[ "$remote_ref" == *"refs/heads/main"* ]]; then
+    echo "Direct push to main is not allowed. Use a feature branch and open a PR."
+    exit 1
+  fi
+done
+exit 0
