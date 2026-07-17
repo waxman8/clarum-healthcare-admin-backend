@@ -31,7 +31,8 @@ class TrusteeRepository:
     async def create(self, payload: TrusteeCreate) -> Trustee:
         obj = Trustee(**payload.model_dump())
         self.db.add(obj)
-        await self.db.flush()
+        await self.db.commit()
+        await self.db.refresh(obj)
         return obj
 
     async def update(self, item_id: int, payload: TrusteeUpdate, scheme_id: Optional[int] = None) -> Optional[Trustee]:
@@ -40,7 +41,8 @@ class TrusteeRepository:
             return None
         for k, v in payload.model_dump(exclude_unset=True).items():
             setattr(obj, k, v)
-        await self.db.flush()
+        await self.db.commit()
+        await self.db.refresh(obj)
         return obj
 
     async def soft_delete(self, item_id: int, scheme_id: Optional[int] = None, deleted_by: Optional[int] = None) -> bool:
@@ -52,5 +54,5 @@ class TrusteeRepository:
         obj.deleted_at = datetime.now(timezone.utc)
         if deleted_by:
             obj.deleted_by = deleted_by
-        await self.db.flush()
+        await self.db.commit()
         return True

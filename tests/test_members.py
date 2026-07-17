@@ -16,6 +16,7 @@ async def test_create_member(client, auth_headers, seed_scheme, seed_plan):
         "join_date": "2026-01-01",
         "email": "john@test.co.za",
         "cell_number": "0821234567",
+        "status": "active",
     }
     resp = await client.post("/api/v1/members", json=payload, headers=auth_headers)
     assert resp.status_code == 200, resp.text
