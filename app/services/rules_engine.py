@@ -23,6 +23,7 @@ from typing import Optional
 
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.billing import (
     BenefitBalance, ChronicRegistration, ClaimAdjudicationLog, Formulary, NappiCode
@@ -899,7 +900,11 @@ async def run_rules_engine(
     results = []
 
     # Rule 1: Member active
-    member_res = await db.execute(select(Member).where(Member.id == member_id))
+    member_res = await db.execute(
+        select(Member)
+        .where(Member.id == member_id)
+        .options(selectinload(Member.plan_option))
+    )
     member = member_res.scalar_one_or_none()
 
     if not member:
@@ -977,7 +982,7 @@ async def run_rules_engine(
     ))
 
     # Rule 5: Benefit limit check (backward compat)
-    if member:
+    if member and member.plan_option:
         from app.models.members import BenefitLimit
         limits_res = await db.execute(
             select(BenefitLimit).where(

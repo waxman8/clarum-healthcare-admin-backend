@@ -24,9 +24,11 @@ from app.constants import Role, MemberStatus
 # ---------------------------------------------------------------------------
 @pytest.fixture(scope="session")
 def event_loop():
-    loop = asyncio.new_event_loop()
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
     yield loop
-    loop.close()
 
 
 # ---------------------------------------------------------------------------
@@ -35,7 +37,7 @@ def event_loop():
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def test_engine():
     engine = create_async_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
     async with engine.begin() as conn:
@@ -44,9 +46,9 @@ async def test_engine():
     await engine.dispose()
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def db_session(test_engine):
-    """Session-scoped DB session shared across all tests."""
+    """Function-scoped DB session."""
     factory = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
     async with factory() as session:
         yield session
@@ -55,7 +57,7 @@ async def db_session(test_engine):
 # ---------------------------------------------------------------------------
 # FastAPI test client wired to the in-memory DB
 # ---------------------------------------------------------------------------
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def client(test_engine):
     factory = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
 
@@ -72,7 +74,7 @@ async def client(test_engine):
 # ---------------------------------------------------------------------------
 # Minimal seed helpers  (all session-scoped — created once, shared by all tests)
 # ---------------------------------------------------------------------------
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def seed_scheme(db_session):
     from app.models.auth import Scheme
     scheme = Scheme(
@@ -87,7 +89,7 @@ async def seed_scheme(db_session):
     return scheme
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def seed_plan(db_session, seed_scheme):
     from app.models.reference import PlanOption
     plan = PlanOption(
@@ -107,7 +109,7 @@ async def seed_plan(db_session, seed_scheme):
     return plan
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def seed_member(db_session, seed_scheme, seed_plan):
     from app.models.members import Member
     member = Member(
@@ -128,7 +130,7 @@ async def seed_member(db_session, seed_scheme, seed_plan):
     return member
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def seed_provider(db_session):
     from app.models.providers import Provider
     provider = Provider(
@@ -145,7 +147,7 @@ async def seed_provider(db_session):
     return provider
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def seed_admin_user(db_session, seed_scheme):
     from app.models.auth import User
     user = User(
@@ -162,7 +164,7 @@ async def seed_admin_user(db_session, seed_scheme):
     return user
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def auth_headers(client, seed_admin_user):
     """Return Authorization headers for the admin user."""
     resp = await client.post(
