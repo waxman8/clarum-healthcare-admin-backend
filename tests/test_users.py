@@ -1,12 +1,13 @@
 import pytest
-from app.models.auth import User, Scheme
+from app.models.auth import User, Scheme, AuditLog
 from app.constants import Role, UserStatus
 from app.integrations.registry import get as get_integration
 from app.integrations.contracts import MessagingGateway
+from sqlalchemy import select
 
 
 @pytest.mark.asyncio
-async def test_users_api_crud_cycle(client, auth_headers):
+async def test_users_api_crud_cycle(client, auth_headers, db_session):
     # 1. Clear Mock email log
     gateway = get_integration(MessagingGateway)
     gateway.email_log.clear()
@@ -35,12 +36,20 @@ async def test_users_api_crud_cycle(client, auth_headers):
     assert "Welcome" in subject
     assert "Clarum@" in text
 
+    # Verify 'create' AuditLog entry was written
+    result = await db_session.execute(
+        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == "create")
+    )
+    audit = result.scalar_one_or_none()
+    assert audit is not None
+    assert "new.user@test.co.za" in audit.new_value
+
     # 3. GET user
     resp = await client.get(f"/api/v1/users/{user_id}", headers=auth_headers)
     assert resp.status_code == 200
     assert resp.json()["full_name"] == "New Portal User"
 
-    # 4. LIST users
+    # 4. LIST users (without filters)
     resp = await client.get("/api/v1/users", headers=auth_headers)
     assert resp.status_code == 200
     list_data = resp.json()
@@ -49,7 +58,44 @@ async def test_users_api_crud_cycle(client, auth_headers):
     emails = [u["email"] for u in list_data["items"]]
     assert "new.user@test.co.za" in emails
 
-    # 5. UPDATE user (inline edit of roles)
+    # 5. LIST users (with filters: search, role, status)
+    # Search by email (positive)
+    resp = await client.get("/api/v1/users?search=new.user", headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1
+    assert resp.json()["items"][0]["email"] == "new.user@test.co.za"
+
+    # Search by name (positive)
+    resp = await client.get("/api/v1/users?search=Portal", headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1
+
+    # Search (negative)
+    resp = await client.get("/api/v1/users?search=nonexistent-query", headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 0
+
+    # Filter by role (positive)
+    resp = await client.get(f"/api/v1/users?role={Role.SCHEME_ADMIN}", headers=auth_headers)
+    assert resp.status_code == 200
+    assert any(u["email"] == "new.user@test.co.za" for u in resp.json()["items"])
+
+    # Filter by role (negative)
+    resp = await client.get(f"/api/v1/users?role={Role.CLAIMS_PROCESSOR}", headers=auth_headers)
+    assert resp.status_code == 200
+    assert not any(u["email"] == "new.user@test.co.za" for u in resp.json()["items"])
+
+    # Filter by status (positive - active)
+    resp = await client.get("/api/v1/users?status=active", headers=auth_headers)
+    assert resp.status_code == 200
+    assert any(u["email"] == "new.user@test.co.za" for u in resp.json()["items"])
+
+    # Filter by status (negative - deactivated)
+    resp = await client.get("/api/v1/users?status=deactivated", headers=auth_headers)
+    assert resp.status_code == 200
+    assert not any(u["email"] == "new.user@test.co.za" for u in resp.json()["items"])
+
+    # 6. UPDATE user (inline edit of roles, name)
     update_payload = {
         "role": Role.CALL_CENTRE_AGENT,
         "full_name": "Updated Portal User",
@@ -59,7 +105,18 @@ async def test_users_api_crud_cycle(client, auth_headers):
     assert resp.json()["role"] == Role.CALL_CENTRE_AGENT
     assert resp.json()["full_name"] == "Updated Portal User"
 
-    # 6. FORCE password reset
+    # Verify 'role_change' and 'name_change' AuditLogs
+    result_role = await db_session.execute(
+        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == "role_change")
+    )
+    assert result_role.scalar_one_or_none() is not None
+
+    result_name = await db_session.execute(
+        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == "name_change")
+    )
+    assert result_name.scalar_one_or_none() is not None
+
+    # 7. FORCE password reset
     gateway.email_log.clear()
     resp = await client.post(f"/api/v1/users/{user_id}/reset-password", headers=auth_headers)
     assert resp.status_code == 200
@@ -72,7 +129,13 @@ async def test_users_api_crud_cycle(client, auth_headers):
     assert "Reset" in subject
     assert "Clarum@" in text
 
-    # 7. DEACTIVATE user (toggling is_active=False via update)
+    # Verify 'reset' AuditLog
+    result_reset = await db_session.execute(
+        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == "reset")
+    )
+    assert result_reset.scalar_one_or_none() is not None
+
+    # 8. DEACTIVATE user (toggling is_active=False via update)
     deactivate_payload = {
         "is_active": False
     }
@@ -80,6 +143,12 @@ async def test_users_api_crud_cycle(client, auth_headers):
     assert resp.status_code == 200
     assert resp.json()["is_active"] is False
     assert resp.json()["status"] == "deactivated"
+
+    # Verify 'deactivate' AuditLog
+    result_deact = await db_session.execute(
+        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == "deactivate")
+    )
+    assert result_deact.scalar_one_or_none() is not None
 
 
 @pytest.mark.asyncio
@@ -137,3 +206,45 @@ async def test_cross_scheme_leak_prevention(client, auth_headers, db_session):
     # Try to force password reset on Scheme B user
     resp = await client.post(f"/api/v1/users/{user_b.id}/reset-password", headers=auth_headers)
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_role_gated_access_prevention(client, db_session, seed_scheme):
+    # Seed a non-Super-Admin user (e.g., Scheme Admin or Claims Processor)
+    from app.auth.security import get_password_hash
+    non_admin_user = User(
+        email="scheme.admin@test.co.za",
+        full_name="Scheme Admin User",
+        role=Role.SCHEME_ADMIN,
+        scheme_id=seed_scheme.id,
+        hashed_password=get_password_hash("Test@1234"),
+        is_active=True,
+    )
+    db_session.add(non_admin_user)
+    await db_session.commit()
+    await db_session.refresh(non_admin_user)
+
+    # Log in as the non-Super-Admin user
+    resp = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "scheme.admin@test.co.za", "password": "Test@1234"},
+    )
+    assert resp.status_code == 200
+    token = resp.json()["access_token"]
+    non_admin_headers = {"Authorization": f"Bearer {token}"}
+
+    # Verify they get 403 Forbidden on Users API endpoints
+    resp = await client.get("/api/v1/users", headers=non_admin_headers)
+    assert resp.status_code == 403
+
+    resp = await client.post("/api/v1/users", json={"email": "hacker@test.co.za", "full_name": "Hack", "role": Role.SCHEME_ADMIN}, headers=non_admin_headers)
+    assert resp.status_code == 403
+
+    resp = await client.get("/api/v1/users/1", headers=non_admin_headers)
+    assert resp.status_code == 403
+
+    resp = await client.patch("/api/v1/users/1", json={"full_name": "Hack"}, headers=non_admin_headers)
+    assert resp.status_code == 403
+
+    resp = await client.post("/api/v1/users/1/reset-password", headers=non_admin_headers)
+    assert resp.status_code == 403
