@@ -140,3 +140,28 @@ class PaginatedMembersResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+
+
+class MemberCommunicationPreferenceRead(BaseModel):
+    id: int
+    member_id: int
+    channel: str
+    category: str
+    is_opted_in: bool
+
+    model_config = {"from_attributes": True}
+
+
+class MemberCommunicationPreferenceMatrixResponse(BaseModel):
+    member_id: int
+    preferences: List[MemberCommunicationPreferenceRead]
+
+
+class MemberCommunicationPreferenceUpdateItem(BaseModel):
+    channel: str
+    category: str
+    is_opted_in: bool
+
+
+class MemberCommunicationPreferenceUpdateRequest(BaseModel):
+    preferences: List[MemberCommunicationPreferenceUpdateItem]
