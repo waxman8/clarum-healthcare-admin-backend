@@ -62,6 +62,8 @@ class MemberContribution(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
+    modified_date = Column(DateTime(timezone=True), nullable=True)
+    modified_user = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     member = relationship("Member", backref="contributions")
     scheme = relationship("Scheme")
@@ -230,11 +232,13 @@ class ChronicRegistration(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
+    modified_date = Column(DateTime(timezone=True), nullable=True)
+    modified_user = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     member = relationship("Member", back_populates="chronic_registrations")
     dependant = relationship("Dependant")
     icd10 = relationship("ICD10Code")
-    decided_by_user = relationship("User")
+    decided_by_user = relationship("User", foreign_keys=[decided_by])
 
 
 class ClaimAdjudicationLog(Base):
@@ -282,6 +286,8 @@ class Dispute(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
+    modified_date = Column(DateTime(timezone=True), nullable=True)
+    modified_user = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     member = relationship("Member", back_populates="disputes")
     claim = relationship("Claim")

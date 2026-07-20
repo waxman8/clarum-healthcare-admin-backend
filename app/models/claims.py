@@ -28,12 +28,14 @@ class Claim(Base):
     adjudicated_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    modified_date = Column(DateTime(timezone=True), nullable=True)
+    modified_user = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     scheme = relationship("Scheme", back_populates="claims")
     member = relationship("Member", back_populates="claims")
     dependant = relationship("Dependant")
     provider = relationship("Provider")
-    adjudicated_by_user = relationship("User")
+    adjudicated_by_user = relationship("User", foreign_keys=[adjudicated_by])
     lines = relationship("ClaimLine", back_populates="claim")
     adjudication_logs = relationship("ClaimAdjudicationLog", back_populates="claim")
 

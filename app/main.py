@@ -10,6 +10,7 @@ logger = logging.getLogger("app.startup")
 
 from app.routers import auth, members, providers, authorisations, claims, dashboard, schemes
 from app.routers import billing, chronic, disputes, reports, reference, plan_config, underwriting
+from app.routers import audit_log
 from app.routers import trustee, principal_officer, administrator_accredited
 from app.routers import managed_care_organisation_mco, external_auditor, statutory_actuary
 from app.routers import compliance_officer, information_officer_popia
@@ -109,6 +110,7 @@ app.include_router(reports.router)
 app.include_router(reference.router)
 app.include_router(plan_config.router)
 app.include_router(underwriting.router)
+app.include_router(audit_log.router)
 # Week-1 sprint: Scheme Governance entities
 app.include_router(trustee.router)
 app.include_router(principal_officer.router)

@@ -46,6 +46,8 @@ class UnderwritingDecision(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
+    modified_date = Column(DateTime(timezone=True), nullable=True)
+    modified_user = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Phase 2 hook — NULL = manual entry
     engine_version = Column(String(20), nullable=True)
@@ -106,6 +108,8 @@ class EnrollmentQuestionnaire(Base):
     # Audit
     completed_by = Column(Integer, nullable=False)
     completed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    modified_date = Column(DateTime(timezone=True), nullable=True)
+    modified_user = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Outcome — set after engine evaluation
     status = Column(String(20), nullable=False, default="pending")  # "pending" | "processed"

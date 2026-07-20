@@ -9,7 +9,7 @@ from datetime import date, datetime, timezone
 
 from app.database import get_db
 from app.models.billing import ChronicRegistration
-from app.models.auth import User, AuditLog
+from app.models.auth import User
 from app.schemas.chronic import (
     ChronicRegistrationCreate,
     ChronicRegistrationDecision,
@@ -18,6 +18,7 @@ from app.schemas.chronic import (
 )
 from app.auth.dependencies import get_current_user, _effective_scheme_id
 from app.constants import Role, ChronicStatus
+from app.services.audit import log_audit
 
 router = APIRouter(prefix="/api/v1/chronic-registrations", tags=["chronic"])
 
@@ -53,14 +54,12 @@ async def create_chronic_registration(
     db.add(reg)
     await db.flush()
 
-    audit = AuditLog(
-        user_id=current_user.id,
-        entity_type="chronic_registration",
-        entity_id=reg.id,
-        action="create",
+    log_audit(
+        db, "chronic_registration", reg.id, "create",
+        user_id=current_user.id, user_role=current_user.role,
+        scheme_id=scheme_id, entity_label=f"Member #{reg.member_id}",
         new_value=json.dumps({"member_id": data.member_id, "icd10_code_id": data.icd10_code_id}),
     )
-    db.add(audit)
     await db.commit()
 
     result = await db.execute(
@@ -169,16 +168,16 @@ async def decide_chronic_registration(
     if decision.approved_medicines is not None:
         reg.approved_medicines = json.dumps(decision.approved_medicines)
     reg.updated_at = datetime.now(timezone.utc)
+    reg.modified_date = datetime.now(timezone.utc)
+    reg.modified_user = current_user.id
 
-    audit = AuditLog(
-        user_id=current_user.id,
-        entity_type="chronic_registration",
-        entity_id=reg_id,
-        action="decide",
+    log_audit(
+        db, "chronic_registration", reg_id, "decide",
+        user_id=current_user.id, user_role=current_user.role,
+        scheme_id=reg.scheme_id, entity_label=f"Member #{reg.member_id}",
         old_value=json.dumps({"status": old_status}),
         new_value=json.dumps({"status": decision.status}),
     )
-    db.add(audit)
     await db.commit()
 
     result = await db.execute(

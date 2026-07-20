@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Date, Numeric
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Date, Numeric, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.database import Base
@@ -67,5 +67,7 @@ class Provider(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
+    modified_date = Column(DateTime(timezone=True), nullable=True)
+    modified_user = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     network_memberships = relationship("ProviderNetwork", back_populates="provider")

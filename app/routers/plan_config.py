@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import Optional, List
 import math
+import json
 
 from app.database import get_db
 from app.models.reference import PlanOption
@@ -25,6 +26,7 @@ from app.schemas.plan_config import (
 )
 from app.auth.dependencies import get_current_user, _scheme_id_for
 from app.constants import Role
+from app.services.audit import log_audit
 
 router = APIRouter(prefix="/api/v1/plan-config", tags=["plan-config"])
 
@@ -81,6 +83,12 @@ async def create_plan_option(
     sid = _scheme_id_for(current_user, scheme_id)
     obj = PlanOption(scheme_id=sid, **data.model_dump())
     db.add(obj)
+    await db.flush()
+    log_audit(
+        db, "plan_option", obj.id, "create",
+        user_id=current_user.id, user_role=current_user.role, scheme_id=sid, entity_label=obj.name,
+        new_value=json.dumps({"name": obj.name}, default=str),
+    )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -97,8 +105,16 @@ async def update_plan_option(
     obj = (await db.execute(select(PlanOption).where(PlanOption.id == plan_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Plan option not found")
-    for field, value in data.model_dump(exclude_none=True).items():
+    changes = data.model_dump(exclude_none=True)
+    old_values = {field: getattr(obj, field) for field in changes}
+    for field, value in changes.items():
         setattr(obj, field, value)
+    if changes:
+        log_audit(
+            db, "plan_option", obj.id, "update",
+            user_id=current_user.id, user_role=current_user.role, scheme_id=obj.scheme_id, entity_label=obj.name,
+            old_value=json.dumps(old_values, default=str), new_value=json.dumps(changes, default=str),
+        )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -114,6 +130,10 @@ async def delete_plan_option(
     obj = (await db.execute(select(PlanOption).where(PlanOption.id == plan_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Plan option not found")
+    log_audit(
+        db, "plan_option", obj.id, "delete",
+        user_id=current_user.id, user_role=current_user.role, scheme_id=obj.scheme_id, entity_label=obj.name,
+    )
     await db.delete(obj)
     await db.commit()
 
@@ -158,6 +178,13 @@ async def create_benefit_limit(
     _require_admin(current_user)
     obj = BenefitLimit(**data.model_dump())
     db.add(obj)
+    await db.flush()
+    log_audit(
+        db, "benefit_limit", obj.id, "create",
+        user_id=current_user.id, user_role=current_user.role,
+        entity_label=f"{obj.benefit_category} ({obj.limit_type})",
+        new_value=json.dumps({"limit_value": obj.limit_value, "benefit_year": obj.benefit_year}, default=str),
+    )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -174,8 +201,17 @@ async def update_benefit_limit(
     obj = (await db.execute(select(BenefitLimit).where(BenefitLimit.id == limit_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Benefit limit not found")
-    for field, value in data.model_dump(exclude_none=True).items():
+    changes = data.model_dump(exclude_none=True)
+    old_values = {field: getattr(obj, field) for field in changes}
+    for field, value in changes.items():
         setattr(obj, field, value)
+    if changes:
+        log_audit(
+            db, "benefit_limit", obj.id, "update",
+            user_id=current_user.id, user_role=current_user.role,
+            entity_label=f"{obj.benefit_category} ({obj.limit_type})",
+            old_value=json.dumps(old_values, default=str), new_value=json.dumps(changes, default=str),
+        )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -191,6 +227,11 @@ async def delete_benefit_limit(
     obj = (await db.execute(select(BenefitLimit).where(BenefitLimit.id == limit_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Benefit limit not found")
+    log_audit(
+        db, "benefit_limit", obj.id, "delete",
+        user_id=current_user.id, user_role=current_user.role,
+        entity_label=f"{obj.benefit_category} ({obj.limit_type})",
+    )
     await db.delete(obj)
     await db.commit()
 
@@ -227,7 +268,16 @@ async def create_contribution_rate(
     obj = ContributionRate(**data.model_dump())
     db.add(obj)
     try:
+        await db.flush()
+        log_audit(
+            db, "contribution_rate", obj.id, "create",
+            user_id=current_user.id, user_role=current_user.role,
+            entity_label=f"Plan {obj.plan_option_id} - {obj.member_type} ({obj.effective_year})",
+            new_value=json.dumps({"monthly_rate_cents": obj.monthly_rate_cents}, default=str),
+        )
         await db.commit()
+    except HTTPException:
+        raise
     except Exception:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Duplicate contribution rate for this plan/member_type/year")
@@ -246,8 +296,17 @@ async def update_contribution_rate(
     obj = (await db.execute(select(ContributionRate).where(ContributionRate.id == rate_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Contribution rate not found")
-    for field, value in data.model_dump(exclude_none=True).items():
+    changes = data.model_dump(exclude_none=True)
+    old_values = {field: getattr(obj, field) for field in changes}
+    for field, value in changes.items():
         setattr(obj, field, value)
+    if changes:
+        log_audit(
+            db, "contribution_rate", obj.id, "update",
+            user_id=current_user.id, user_role=current_user.role,
+            entity_label=f"Plan {obj.plan_option_id} - {obj.member_type} ({obj.effective_year})",
+            old_value=json.dumps(old_values, default=str), new_value=json.dumps(changes, default=str),
+        )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -263,6 +322,11 @@ async def delete_contribution_rate(
     obj = (await db.execute(select(ContributionRate).where(ContributionRate.id == rate_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Contribution rate not found")
+    log_audit(
+        db, "contribution_rate", obj.id, "delete",
+        user_id=current_user.id, user_role=current_user.role,
+        entity_label=f"Plan {obj.plan_option_id} - {obj.member_type} ({obj.effective_year})",
+    )
     await db.delete(obj)
     await db.commit()
 
@@ -301,7 +365,15 @@ async def create_copayment_rule(
     obj = CopaymentRule(scheme_id=sid, **data.model_dump())
     db.add(obj)
     try:
+        await db.flush()
+        log_audit(
+            db, "copayment_rule", obj.id, "create",
+            user_id=current_user.id, user_role=current_user.role, scheme_id=sid, entity_label=obj.trigger,
+            new_value=json.dumps({"trigger": obj.trigger}, default=str),
+        )
         await db.commit()
+    except HTTPException:
+        raise
     except Exception:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Duplicate trigger for this scheme/plan")
@@ -320,8 +392,16 @@ async def update_copayment_rule(
     obj = (await db.execute(select(CopaymentRule).where(CopaymentRule.id == rule_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Copayment rule not found")
-    for field, value in data.model_dump(exclude_none=True).items():
+    changes = data.model_dump(exclude_none=True)
+    old_values = {field: getattr(obj, field) for field in changes}
+    for field, value in changes.items():
         setattr(obj, field, value)
+    if changes:
+        log_audit(
+            db, "copayment_rule", obj.id, "update",
+            user_id=current_user.id, user_role=current_user.role, scheme_id=obj.scheme_id, entity_label=obj.trigger,
+            old_value=json.dumps(old_values, default=str), new_value=json.dumps(changes, default=str),
+        )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -337,6 +417,10 @@ async def delete_copayment_rule(
     obj = (await db.execute(select(CopaymentRule).where(CopaymentRule.id == rule_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Copayment rule not found")
+    log_audit(
+        db, "copayment_rule", obj.id, "delete",
+        user_id=current_user.id, user_role=current_user.role, scheme_id=obj.scheme_id, entity_label=obj.trigger,
+    )
     await db.delete(obj)
     await db.commit()
 
@@ -384,6 +468,13 @@ async def create_formulary_entry(
     _require_admin(current_user)
     obj = Formulary(**data.model_dump())
     db.add(obj)
+    await db.flush()
+    log_audit(
+        db, "formulary", obj.id, "create",
+        user_id=current_user.id, user_role=current_user.role,
+        entity_label=f"Plan {obj.plan_option_id} - {obj.formulary_type}",
+        new_value=json.dumps({"nappi_code_id": obj.nappi_code_id}, default=str),
+    )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -400,8 +491,17 @@ async def update_formulary_entry(
     obj = (await db.execute(select(Formulary).where(Formulary.id == entry_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Formulary entry not found")
-    for field, value in data.model_dump(exclude_none=True).items():
+    changes = data.model_dump(exclude_none=True)
+    old_values = {field: getattr(obj, field) for field in changes}
+    for field, value in changes.items():
         setattr(obj, field, value)
+    if changes:
+        log_audit(
+            db, "formulary", obj.id, "update",
+            user_id=current_user.id, user_role=current_user.role,
+            entity_label=f"Plan {obj.plan_option_id} - {obj.formulary_type}",
+            old_value=json.dumps(old_values, default=str), new_value=json.dumps(changes, default=str),
+        )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -417,6 +517,11 @@ async def delete_formulary_entry(
     obj = (await db.execute(select(Formulary).where(Formulary.id == entry_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Formulary entry not found")
+    log_audit(
+        db, "formulary", obj.id, "delete",
+        user_id=current_user.id, user_role=current_user.role,
+        entity_label=f"Plan {obj.plan_option_id} - {obj.formulary_type}",
+    )
     await db.delete(obj)
     await db.commit()
 
@@ -471,7 +576,16 @@ async def create_provider_network(
     obj = ProviderNetwork(scheme_id=sid, **data.model_dump())
     db.add(obj)
     try:
+        await db.flush()
+        log_audit(
+            db, "provider_network", obj.id, "create",
+            user_id=current_user.id, user_role=current_user.role, scheme_id=sid,
+            entity_label=f"{provider.trading_name} - {obj.network_type}",
+            new_value=json.dumps({"network_type": obj.network_type}, default=str),
+        )
         await db.commit()
+    except HTTPException:
+        raise
     except Exception:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Provider already has this network type for this scheme")
@@ -490,8 +604,17 @@ async def update_provider_network(
     obj = (await db.execute(select(ProviderNetwork).where(ProviderNetwork.id == network_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Provider network not found")
-    for field, value in data.model_dump(exclude_none=True).items():
+    changes = data.model_dump(exclude_none=True)
+    old_values = {field: getattr(obj, field) for field in changes}
+    for field, value in changes.items():
         setattr(obj, field, value)
+    if changes:
+        log_audit(
+            db, "provider_network", obj.id, "update",
+            user_id=current_user.id, user_role=current_user.role, scheme_id=obj.scheme_id,
+            entity_label=obj.network_type,
+            old_value=json.dumps(old_values, default=str), new_value=json.dumps(changes, default=str),
+        )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -507,5 +630,9 @@ async def delete_provider_network(
     obj = (await db.execute(select(ProviderNetwork).where(ProviderNetwork.id == network_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Provider network not found")
+    log_audit(
+        db, "provider_network", obj.id, "delete",
+        user_id=current_user.id, user_role=current_user.role, scheme_id=obj.scheme_id, entity_label=obj.network_type,
+    )
     await db.delete(obj)
     await db.commit()

@@ -9,6 +9,7 @@ from typing import Optional, List
 import math
 import csv
 import io
+import json
 
 from app.database import get_db
 from app.models.reference import ICD10Code, TariffCode, RejectionCode, DisciplineCode
@@ -24,6 +25,7 @@ from app.schemas.reference import (
 )
 from app.auth.dependencies import get_current_user
 from app.constants import Role
+from app.services.audit import log_audit
 
 router = APIRouter(prefix="/api/v1/reference", tags=["reference"])
 
@@ -97,6 +99,12 @@ async def create_icd10(
         raise HTTPException(status_code=400, detail=f"ICD-10 code '{data.code}' already exists")
     obj = ICD10Code(**data.model_dump())
     db.add(obj)
+    await db.flush()
+    log_audit(
+        db, "icd10_code", obj.id, "create",
+        user_id=current_user.id, user_role=current_user.role, entity_label=obj.code,
+        new_value=json.dumps({"code": obj.code, "description": obj.description}, default=str),
+    )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -113,8 +121,16 @@ async def update_icd10(
     obj = (await db.execute(select(ICD10Code).where(ICD10Code.id == code_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="ICD-10 code not found")
-    for field, value in data.model_dump(exclude_none=True).items():
+    changes = data.model_dump(exclude_none=True)
+    old_values = {field: getattr(obj, field) for field in changes}
+    for field, value in changes.items():
         setattr(obj, field, value)
+    if changes:
+        log_audit(
+            db, "icd10_code", obj.id, "update",
+            user_id=current_user.id, user_role=current_user.role, entity_label=obj.code,
+            old_value=json.dumps(old_values, default=str), new_value=json.dumps(changes, default=str),
+        )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -130,6 +146,10 @@ async def delete_icd10(
     obj = (await db.execute(select(ICD10Code).where(ICD10Code.id == code_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="ICD-10 code not found")
+    log_audit(
+        db, "icd10_code", obj.id, "delete",
+        user_id=current_user.id, user_role=current_user.role, entity_label=obj.code,
+    )
     await db.delete(obj)
     await db.commit()
 
@@ -165,6 +185,12 @@ async def import_icd10(
             imported += 1
         except Exception as e:
             errors.append(f"Row {i}: {e}")
+    if imported:
+        log_audit(
+            db, "icd10_code", None, "import_batch",
+            user_id=current_user.id, user_role=current_user.role,
+            entity_label=f"{imported} imported, {skipped} skipped",
+        )
     await db.commit()
     return BulkImportResult(imported=imported, skipped=skipped, errors=errors)
 
@@ -237,6 +263,12 @@ async def create_tariff(
         raise HTTPException(status_code=400, detail=f"Tariff code '{data.code}' already exists")
     obj = TariffCode(**data.model_dump())
     db.add(obj)
+    await db.flush()
+    log_audit(
+        db, "tariff_code", obj.id, "create",
+        user_id=current_user.id, user_role=current_user.role, entity_label=obj.code,
+        new_value=json.dumps({"code": obj.code, "description": obj.description}, default=str),
+    )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -253,8 +285,16 @@ async def update_tariff(
     obj = (await db.execute(select(TariffCode).where(TariffCode.id == code_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Tariff code not found")
-    for field, value in data.model_dump(exclude_none=True).items():
+    changes = data.model_dump(exclude_none=True)
+    old_values = {field: getattr(obj, field) for field in changes}
+    for field, value in changes.items():
         setattr(obj, field, value)
+    if changes:
+        log_audit(
+            db, "tariff_code", obj.id, "update",
+            user_id=current_user.id, user_role=current_user.role, entity_label=obj.code,
+            old_value=json.dumps(old_values, default=str), new_value=json.dumps(changes, default=str),
+        )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -270,6 +310,10 @@ async def delete_tariff(
     obj = (await db.execute(select(TariffCode).where(TariffCode.id == code_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Tariff code not found")
+    log_audit(
+        db, "tariff_code", obj.id, "delete",
+        user_id=current_user.id, user_role=current_user.role, entity_label=obj.code,
+    )
     await db.delete(obj)
     await db.commit()
 
@@ -308,6 +352,12 @@ async def import_tariffs(
             imported += 1
         except Exception as e:
             errors.append(f"Row {i}: {e}")
+    if imported:
+        log_audit(
+            db, "tariff_code", None, "import_batch",
+            user_id=current_user.id, user_role=current_user.role,
+            entity_label=f"{imported} imported, {skipped} skipped",
+        )
     await db.commit()
     return BulkImportResult(imported=imported, skipped=skipped, errors=errors)
 
@@ -375,6 +425,12 @@ async def create_nappi(
         raise HTTPException(status_code=400, detail=f"NAPPI code '{data.nappi_code}' already exists")
     obj = NappiCode(**data.model_dump())
     db.add(obj)
+    await db.flush()
+    log_audit(
+        db, "nappi_code", obj.id, "create",
+        user_id=current_user.id, user_role=current_user.role, entity_label=obj.product_name or obj.nappi_code,
+        new_value=json.dumps({"nappi_code": obj.nappi_code, "product_name": obj.product_name}, default=str),
+    )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -391,8 +447,16 @@ async def update_nappi(
     obj = (await db.execute(select(NappiCode).where(NappiCode.id == nappi_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="NAPPI code not found")
-    for field, value in data.model_dump(exclude_none=True).items():
+    changes = data.model_dump(exclude_none=True)
+    old_values = {field: getattr(obj, field) for field in changes}
+    for field, value in changes.items():
         setattr(obj, field, value)
+    if changes:
+        log_audit(
+            db, "nappi_code", obj.id, "update",
+            user_id=current_user.id, user_role=current_user.role, entity_label=obj.product_name or obj.nappi_code,
+            old_value=json.dumps(old_values, default=str), new_value=json.dumps(changes, default=str),
+        )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -408,6 +472,10 @@ async def delete_nappi(
     obj = (await db.execute(select(NappiCode).where(NappiCode.id == nappi_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="NAPPI code not found")
+    log_audit(
+        db, "nappi_code", obj.id, "delete",
+        user_id=current_user.id, user_role=current_user.role, entity_label=obj.product_name or obj.nappi_code,
+    )
     await db.delete(obj)
     await db.commit()
 
@@ -444,6 +512,12 @@ async def import_nappi(
             imported += 1
         except Exception as e:
             errors.append(f"Row {i}: {e}")
+    if imported:
+        log_audit(
+            db, "nappi_code", None, "import_batch",
+            user_id=current_user.id, user_role=current_user.role,
+            entity_label=f"{imported} imported, {skipped} skipped",
+        )
     await db.commit()
     return BulkImportResult(imported=imported, skipped=skipped, errors=errors)
 
@@ -504,6 +578,12 @@ async def create_rejection_code(
         raise HTTPException(status_code=400, detail=f"Rejection code '{data.code}' already exists")
     obj = RejectionCode(**data.model_dump())
     db.add(obj)
+    await db.flush()
+    log_audit(
+        db, "rejection_code", obj.id, "create",
+        user_id=current_user.id, user_role=current_user.role, entity_label=obj.code,
+        new_value=json.dumps({"code": obj.code, "description": obj.description}, default=str),
+    )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -520,8 +600,16 @@ async def update_rejection_code(
     obj = (await db.execute(select(RejectionCode).where(RejectionCode.id == code_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Rejection code not found")
-    for field, value in data.model_dump(exclude_none=True).items():
+    changes = data.model_dump(exclude_none=True)
+    old_values = {field: getattr(obj, field) for field in changes}
+    for field, value in changes.items():
         setattr(obj, field, value)
+    if changes:
+        log_audit(
+            db, "rejection_code", obj.id, "update",
+            user_id=current_user.id, user_role=current_user.role, entity_label=obj.code,
+            old_value=json.dumps(old_values, default=str), new_value=json.dumps(changes, default=str),
+        )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -537,6 +625,10 @@ async def delete_rejection_code(
     obj = (await db.execute(select(RejectionCode).where(RejectionCode.id == code_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Rejection code not found")
+    log_audit(
+        db, "rejection_code", obj.id, "delete",
+        user_id=current_user.id, user_role=current_user.role, entity_label=obj.code,
+    )
     await db.delete(obj)
     await db.commit()
 
@@ -600,6 +692,12 @@ async def create_discipline_code(
         raise HTTPException(status_code=400, detail=f"Discipline code '{data.code}' already exists")
     obj = DisciplineCode(**data.model_dump())
     db.add(obj)
+    await db.flush()
+    log_audit(
+        db, "discipline_code", obj.id, "create",
+        user_id=current_user.id, user_role=current_user.role, entity_label=obj.code,
+        new_value=json.dumps({"code": obj.code, "description": obj.description}, default=str),
+    )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -616,8 +714,16 @@ async def update_discipline_code(
     obj = (await db.execute(select(DisciplineCode).where(DisciplineCode.id == code_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Discipline code not found")
-    for field, value in data.model_dump(exclude_none=True).items():
+    changes = data.model_dump(exclude_none=True)
+    old_values = {field: getattr(obj, field) for field in changes}
+    for field, value in changes.items():
         setattr(obj, field, value)
+    if changes:
+        log_audit(
+            db, "discipline_code", obj.id, "update",
+            user_id=current_user.id, user_role=current_user.role, entity_label=obj.code,
+            old_value=json.dumps(old_values, default=str), new_value=json.dumps(changes, default=str),
+        )
     await db.commit()
     await db.refresh(obj)
     return obj
@@ -633,5 +739,9 @@ async def delete_discipline_code(
     obj = (await db.execute(select(DisciplineCode).where(DisciplineCode.id == code_id))).scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404, detail="Discipline code not found")
+    log_audit(
+        db, "discipline_code", obj.id, "delete",
+        user_id=current_user.id, user_role=current_user.role, entity_label=obj.code,
+    )
     await db.delete(obj)
     await db.commit()

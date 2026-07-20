@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from app.database import get_db
 from app.models.billing import Dispute
-from app.models.auth import User, AuditLog
+from app.models.auth import User
 from app.schemas.disputes import (
     DisputeCreate,
     DisputeResolve,
@@ -18,6 +18,7 @@ from app.schemas.disputes import (
 )
 from app.auth.dependencies import get_current_user, _effective_scheme_id
 from app.constants import Role, DisputeStatus
+from app.services.audit import log_audit
 
 router = APIRouter(prefix="/api/v1/disputes", tags=["disputes"])
 
@@ -77,14 +78,12 @@ async def create_dispute(
     db.add(dispute)
     await db.flush()
 
-    audit = AuditLog(
-        user_id=current_user.id,
-        entity_type="dispute",
-        entity_id=dispute.id,
-        action="create",
+    log_audit(
+        db, "dispute", dispute.id, "create",
+        user_id=current_user.id, user_role=current_user.role,
+        scheme_id=scheme_id, entity_label=dispute_number,
         new_value=json.dumps({"dispute_number": dispute_number, "member_id": data.member_id}),
     )
-    db.add(audit)
     await db.commit()
 
     result = await db.execute(
@@ -196,6 +195,8 @@ async def resolve_dispute(
     dispute.resolved_by = current_user.id
     dispute.resolved_at = datetime.now(timezone.utc)
     dispute.updated_at = datetime.now(timezone.utc)
+    dispute.modified_date = datetime.now(timezone.utc)
+    dispute.modified_user = current_user.id
 
     if resolution.status == DisputeStatus.ESCALATED_TO_CMS:
         dispute.escalated_to_cms = True
@@ -203,15 +204,13 @@ async def resolve_dispute(
     else:
         dispute.escalated_to_cms = False
 
-    audit = AuditLog(
-        user_id=current_user.id,
-        entity_type="dispute",
-        entity_id=dispute_id,
-        action="resolve",
+    log_audit(
+        db, "dispute", dispute_id, "resolve",
+        user_id=current_user.id, user_role=current_user.role,
+        scheme_id=dispute.scheme_id, entity_label=dispute.dispute_number,
         old_value=json.dumps({"status": old_status}),
         new_value=json.dumps({"status": resolution.status, "resolution": resolution.resolution}),
     )
-    db.add(audit)
     await db.commit()
 
     result = await db.execute(

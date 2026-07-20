@@ -1,6 +1,7 @@
 # Auto-generated async CRUD router for InformationOfficer
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+import json
 
 from app.database import get_db
 from app.auth.dependencies import get_current_user, _effective_scheme_id
@@ -8,6 +9,7 @@ from app.models.auth import User
 from app.models.scheme_governance import InformationOfficer
 from app.schemas.information_officer_popia import InformationOfficerCreate, InformationOfficerUpdate, InformationOfficerRead
 from app.repositories.information_officer_popia_repository import InformationOfficerRepository
+from app.services.audit import log_audit
 
 router = APIRouter(prefix="/api/v1/information-officer-popia", tags=["Information Officer (POPIA)"])
 
@@ -29,7 +31,13 @@ async def create_item(
     current_user: User = Depends(get_current_user),
 ):
     repo = InformationOfficerRepository(db)
-    return await repo.create(payload)
+    obj = await repo.create(payload)
+    log_audit(
+        db, "information_officer", obj.id, "create",
+        user_id=current_user.id, user_role=current_user.role, scheme_id=_effective_scheme_id(current_user),
+        entity_label=obj.full_name,
+    )
+    return obj
 
 
 @router.get("/{item_id}", response_model=InformationOfficerRead)
@@ -55,9 +63,16 @@ async def update_item(
 ):
     repo = InformationOfficerRepository(db)
     scheme_id = _effective_scheme_id(current_user)
+    changes = payload.model_dump(exclude_unset=True)
     obj = await repo.update(item_id, payload, scheme_id=scheme_id)
     if obj is None:
         raise HTTPException(status_code=404, detail="Not found")
+    if changes:
+        log_audit(
+            db, "information_officer", obj.id, "update",
+            user_id=current_user.id, user_role=current_user.role, scheme_id=scheme_id,
+            entity_label=obj.full_name, new_value=json.dumps(changes, default=str),
+        )
     return obj
 
 
@@ -69,6 +84,14 @@ async def delete_item(
 ):
     repo = InformationOfficerRepository(db)
     scheme_id = _effective_scheme_id(current_user)
+    obj = await repo.get(item_id, scheme_id=scheme_id)
+    if obj is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    label = obj.full_name
     deleted = await repo.soft_delete(item_id, scheme_id=scheme_id, deleted_by=current_user.id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Not found")
+    log_audit(
+        db, "information_officer", item_id, "delete",
+        user_id=current_user.id, user_role=current_user.role, scheme_id=scheme_id, entity_label=label,
+    )

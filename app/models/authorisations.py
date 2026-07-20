@@ -21,11 +21,13 @@ class Authorisation(Base):
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    modified_date = Column(DateTime(timezone=True), nullable=True)
+    modified_user = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     member = relationship("Member", back_populates="authorisations")
     dependant = relationship("Dependant")
     requesting_provider = relationship("Provider")
-    created_by_user = relationship("User")
+    created_by_user = relationship("User", foreign_keys=[created_by])
     lines = relationship("AuthorisationLine", back_populates="authorisation")
 
 

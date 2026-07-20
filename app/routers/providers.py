@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 from typing import Optional, List
 import math
+import json
 from datetime import date, datetime, timezone
 
 from app.database import get_db
@@ -16,6 +17,7 @@ from app.schemas.providers import (
 )
 from app.auth.dependencies import get_current_user
 from app.constants import Role
+from app.services.audit import log_audit
 
 router = APIRouter(prefix="/api/v1/providers", tags=["providers"])
 
@@ -74,6 +76,13 @@ async def create_provider(
 
     provider = Provider(**provider_data.model_dump())
     db.add(provider)
+    await db.flush()
+    log_audit(
+        db, "provider", provider.id, "create",
+        user_id=current_user.id, user_role=current_user.role,
+        entity_label=provider.trading_name,
+        new_value=json.dumps({"practice_number": provider.practice_number}, default=str),
+    )
     await db.commit()
     await db.refresh(provider)
     return _strip_banking(provider, current_user)
@@ -170,10 +179,22 @@ async def update_provider(
     if any(f in update_data for f in banking_fields) and current_user.role not in BANKING_ROLES:
         raise HTTPException(status_code=403, detail="Banking details require finance_admin role")
 
+    old_values = {field: getattr(provider, field) for field in update_data}
     for field, value in update_data.items():
         setattr(provider, field, value)
 
     provider.updated_at = datetime.now(timezone.utc)
+    provider.modified_date = datetime.now(timezone.utc)
+    provider.modified_user = current_user.id
+
+    if update_data:
+        log_audit(
+            db, "provider", provider.id, "update",
+            user_id=current_user.id, user_role=current_user.role,
+            entity_label=provider.trading_name,
+            old_value=json.dumps(old_values, default=str),
+            new_value=json.dumps(update_data, default=str),
+        )
     await db.commit()
     await db.refresh(provider)
     return _strip_banking(provider, current_user)
@@ -201,6 +222,14 @@ async def blacklist_provider(
     provider.blacklist_date = request.blacklist_date or date.today()
     provider.is_active = False
     provider.updated_at = datetime.now(timezone.utc)
+    provider.modified_date = datetime.now(timezone.utc)
+    provider.modified_user = current_user.id
+    log_audit(
+        db, "provider", provider.id, "blacklist",
+        user_id=current_user.id, user_role=current_user.role,
+        entity_label=provider.trading_name,
+        new_value=json.dumps({"reason": request.reason}, default=str),
+    )
     await db.commit()
     await db.refresh(provider)
     return _strip_banking(provider, current_user)
@@ -227,6 +256,13 @@ async def unblacklist_provider(
     provider.blacklist_date = None
     provider.is_active = True
     provider.updated_at = datetime.now(timezone.utc)
+    provider.modified_date = datetime.now(timezone.utc)
+    provider.modified_user = current_user.id
+    log_audit(
+        db, "provider", provider.id, "unblacklist",
+        user_id=current_user.id, user_role=current_user.role,
+        entity_label=provider.trading_name,
+    )
     await db.commit()
     await db.refresh(provider)
     return _strip_banking(provider, current_user)
@@ -287,5 +323,12 @@ async def deactivate_provider(
 
     provider.is_active = False
     provider.updated_at = datetime.now(timezone.utc)
+    provider.modified_date = datetime.now(timezone.utc)
+    provider.modified_user = current_user.id
+    log_audit(
+        db, "provider", provider.id, "deactivate",
+        user_id=current_user.id, user_role=current_user.role,
+        entity_label=provider.trading_name,
+    )
     await db.commit()
     return {"message": "Provider deactivated"}

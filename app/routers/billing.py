@@ -4,6 +4,7 @@ from sqlalchemy import select, func, extract
 from sqlalchemy.orm import selectinload
 from typing import Optional
 import math
+import json
 from datetime import date, datetime, timezone
 
 from app.database import get_db
@@ -23,6 +24,7 @@ from app.auth.dependencies import get_current_user, _effective_scheme_id
 from app.models.auth import User
 from app.constants import Role
 from app.services.contribution_calculator import calculate_monthly_contribution
+from app.services.audit import log_audit
 
 router = APIRouter(prefix="/api/v1/billing", tags=["billing"])
 
@@ -263,6 +265,12 @@ async def generate_contributions(
 
     if new_contributions:
         db.add_all(new_contributions)
+        log_audit(
+            db, "member_contribution", None, "generate_batch",
+            user_id=current_user.id, user_role=current_user.role,
+            scheme_id=sid, entity_label=f"{request.billing_month} ({generated} members)",
+            new_value=json.dumps({"billing_month": request.billing_month, "generated": generated, "skipped": skipped}, default=str),
+        )
         await db.commit()
     else:
         await db.flush()
@@ -338,16 +346,26 @@ async def record_payment(
     if sid is not None and entry.scheme_id != sid:
         raise HTTPException(status_code=404, detail="Contribution entry not found")
 
+    old_status = entry.status
     entry.amount_paid_cents = payment.amount_paid_cents
     entry.payment_date = date.fromisoformat(payment.payment_date)
     entry.payment_reference = payment.payment_reference
     entry.updated_at = datetime.now(timezone.utc)
+    entry.modified_date = datetime.now(timezone.utc)
+    entry.modified_user = current_user.id
 
     if entry.amount_paid_cents >= entry.amount_due_cents:
         entry.status = "paid"
     elif entry.amount_paid_cents > 0:
         entry.status = "partially_paid"
 
+    log_audit(
+        db, "member_contribution", entry.id, "record_payment",
+        user_id=current_user.id, user_role=current_user.role,
+        scheme_id=entry.scheme_id, entity_label=entry.billing_month.strftime("%Y-%m"),
+        old_value=json.dumps({"status": old_status}, default=str),
+        new_value=json.dumps({"amount_paid_cents": payment.amount_paid_cents, "status": entry.status}, default=str),
+    )
     await db.commit()
     await db.refresh(entry)
 

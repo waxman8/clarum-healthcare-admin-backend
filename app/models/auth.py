@@ -77,6 +77,8 @@ class AuditLog(Base):
     timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     entity_type = Column(String(100), nullable=False)
     entity_id = Column(Integer, nullable=True)
+    entity_label = Column(String(255), nullable=True)   # human-readable label, avoids per-entity joins
+    scheme_id = Column(Integer, ForeignKey("schemes.id"), nullable=True, index=True)
     action = Column(String(50), nullable=False)
     old_value = Column(Text, nullable=True)
     new_value = Column(Text, nullable=True)

@@ -4,6 +4,7 @@ from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional
 import math
+import json
 from datetime import datetime, timezone, date
 
 
@@ -14,10 +15,11 @@ from app.models.auth import User, Scheme
 from app.schemas.members import (
     MemberCreate, MemberUpdate, MemberStatusUpdate, MemberResponse,
     DependantCreate, DependantUpdate, DependantResponse, BenefitLimitResponse,
-    MemberStatusHistoryResponse, MemberSearchRequest, PaginatedMembersResponse
+    MemberStatusHistoryResponse, MemberSearchRequest, PaginatedMembersResponse,
 )
 from app.auth.dependencies import get_current_user, _effective_scheme_id
 from app.models.billing import MemberContribution
+from app.services.audit import log_audit
 
 router = APIRouter(prefix="/api/v1/members", tags=["members"])
 
@@ -85,6 +87,12 @@ async def create_member(
         reason="Initial enrolment",
     )
     db.add(history)
+    log_audit(
+        db, "member", member.id, "create",
+        user_id=current_user.id, user_role=current_user.role,
+        scheme_id=scheme.id, entity_label=f"{member.first_name} {member.surname}",
+        new_value=json.dumps({"membership_number": membership_number, "status": member_data.status}, default=str),
+    )
     await db.commit()
 
     result = await db.execute(
@@ -163,10 +171,23 @@ async def update_member(
 ):
     member = await get_member_scoped(member_id, db, current_user)
 
-    for field, value in member_data.model_dump(exclude_unset=True).items():
+    changes = member_data.model_dump(exclude_unset=True)
+    old_values = {field: getattr(member, field) for field in changes}
+    for field, value in changes.items():
         setattr(member, field, value)
 
     member.updated_at = datetime.now(timezone.utc)
+    member.modified_date = datetime.now(timezone.utc)
+    member.modified_user = current_user.id
+
+    if changes:
+        log_audit(
+            db, "member", member.id, "update",
+            user_id=current_user.id, user_role=current_user.role,
+            scheme_id=member.scheme_id, entity_label=f"{member.first_name} {member.surname}",
+            old_value=json.dumps(old_values, default=str),
+            new_value=json.dumps(changes, default=str),
+        )
     await db.commit()
 
     result = await db.execute(
@@ -191,6 +212,8 @@ async def update_member_status(
     old_status = member.status
     member.status = status_data.status
     member.updated_at = datetime.now(timezone.utc)
+    member.modified_date = datetime.now(timezone.utc)
+    member.modified_user = current_user.id
 
     history = MemberStatusHistory(
         member_id=member.id,
@@ -200,6 +223,14 @@ async def update_member_status(
         reason=status_data.reason,
     )
     db.add(history)
+    log_audit(
+        db, "member", member.id, "status_change",
+        user_id=current_user.id, user_role=current_user.role,
+        scheme_id=member.scheme_id, entity_label=f"{member.first_name} {member.surname}",
+        old_value=json.dumps({"status": old_status}),
+        new_value=json.dumps({"status": status_data.status, "reason": status_data.reason}),
+        reason=status_data.reason,
+    )
     await db.commit()
 
     result = await db.execute(
@@ -227,10 +258,17 @@ async def add_dependant(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await get_member_scoped(member_id, db, current_user)
+    member = await get_member_scoped(member_id, db, current_user)
 
     dependant = Dependant(member_id=member_id, **dependant_data.model_dump())
     db.add(dependant)
+    await db.flush()
+    log_audit(
+        db, "dependant", dependant.id, "create",
+        user_id=current_user.id, user_role=current_user.role,
+        scheme_id=member.scheme_id, entity_label=f"{dependant.first_name} {dependant.surname}",
+        new_value=json.dumps({"dependant_relationship": dependant.dependant_relationship}, default=str),
+    )
     await db.commit()
     await db.refresh(dependant)
     return dependant
@@ -261,7 +299,7 @@ async def update_dependant(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await get_member_scoped(member_id, db, current_user)
+    member = await get_member_scoped(member_id, db, current_user)
     result = await db.execute(
         select(Dependant).where(Dependant.id == dependant_id, Dependant.member_id == member_id)
     )
@@ -269,9 +307,22 @@ async def update_dependant(
     if not dependant:
         raise HTTPException(status_code=404, detail="Dependant not found")
 
-    for field, value in data.model_dump(exclude_unset=True).items():
+    changes = data.model_dump(exclude_unset=True)
+    old_values = {field: getattr(dependant, field) for field in changes}
+    for field, value in changes.items():
         setattr(dependant, field, value)
 
+    dependant.modified_date = datetime.now(timezone.utc)
+    dependant.modified_user = current_user.id
+
+    if changes:
+        log_audit(
+            db, "dependant", dependant.id, "update",
+            user_id=current_user.id, user_role=current_user.role,
+            scheme_id=member.scheme_id, entity_label=f"{dependant.first_name} {dependant.surname}",
+            old_value=json.dumps(old_values, default=str),
+            new_value=json.dumps(changes, default=str),
+        )
     await db.commit()
     await db.refresh(dependant)
     return dependant

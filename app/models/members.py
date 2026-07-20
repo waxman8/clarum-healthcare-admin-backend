@@ -31,6 +31,8 @@ class Member(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
+    modified_date = Column(DateTime(timezone=True), nullable=True)  # set explicitly by write endpoints, for audit trail
+    modified_user = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     scheme = sa_relationship("Scheme", back_populates="members")
     plan_option = sa_relationship("PlanOption", back_populates="members")
@@ -42,6 +44,7 @@ class Member(Base):
     savings_account = sa_relationship("SavingsAccount", back_populates="member", uselist=False)
     chronic_registrations = sa_relationship("ChronicRegistration", back_populates="member")
     disputes = sa_relationship("Dispute", back_populates="member")
+    modified_by_user = sa_relationship("User", foreign_keys=[modified_user])
 
 
 class Dependant(Base):
@@ -61,6 +64,8 @@ class Dependant(Base):
     effective_from = Column(Date, nullable=True)
     effective_to = Column(Date, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    modified_date = Column(DateTime(timezone=True), nullable=True)
+    modified_user = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     member = sa_relationship("Member", back_populates="dependants")
 

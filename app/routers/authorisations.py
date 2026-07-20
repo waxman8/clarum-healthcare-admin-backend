@@ -18,6 +18,7 @@ from app.schemas.authorisations import (
 from app.auth.dependencies import get_current_user, _effective_scheme_id
 from app.constants import Role, AuthStatus, MemberStatus
 from app.repositories import AuthorisationRepository
+from app.services.audit import log_audit
 
 router = APIRouter(prefix="/api/v1/authorisations", tags=["authorisations"])
 
@@ -81,6 +82,12 @@ async def create_authorisation(
             quantity_requested=line_data.quantity_requested,
         ))
 
+    log_audit(
+        db, "authorisation", auth.id, "create",
+        user_id=current_user.id, user_role=current_user.role,
+        scheme_id=member.scheme_id, entity_label=auth.auth_number,
+        new_value=json.dumps({"auth_type": auth.auth_type}, default=str),
+    )
     await repo.save()
     return await repo.get_by_id(auth.id)
 
@@ -142,6 +149,15 @@ async def approve_authorisation(
     if approve_data.clinical_notes:
         auth.clinical_notes = approve_data.clinical_notes
     auth.updated_at = datetime.now(timezone.utc)
+    auth.modified_date = datetime.now(timezone.utc)
+    auth.modified_user = current_user.id
+
+    log_audit(
+        db, "authorisation", auth.id, "approve",
+        user_id=current_user.id, user_role=current_user.role,
+        scheme_id=auth.member.scheme_id if auth.member else None, entity_label=auth.auth_number,
+        new_value=json.dumps({"approved_days": approve_data.approved_days}, default=str),
+    )
 
     if approve_data.approved_lines:
         for line_approval in approve_data.approved_lines:
@@ -183,9 +199,18 @@ async def decline_authorisation(
     auth.status = AuthStatus.DECLINED
     auth.clinical_notes = decline_data.clinical_notes or f"Declined: {decline_data.reason}"
     auth.updated_at = datetime.now(timezone.utc)
+    auth.modified_date = datetime.now(timezone.utc)
+    auth.modified_user = current_user.id
     for line in auth.lines:
         line.quantity_approved = 0
         line.reason_declined = decline_data.reason
+
+    log_audit(
+        db, "authorisation", auth.id, "decline",
+        user_id=current_user.id, user_role=current_user.role,
+        scheme_id=auth.member.scheme_id if auth.member else None, entity_label=auth.auth_number,
+        reason=decline_data.reason,
+    )
 
     await repo.save()
     return await repo.get_by_id(auth_id)

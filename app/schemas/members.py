@@ -58,6 +58,8 @@ class MemberResponse(BaseModel):
     waiting_period_end_date: Optional[date] = None
     late_joiner_penalty_pct: int = 0
     created_at: datetime
+    modified_date: Optional[datetime] = None
+    modified_user: Optional[int] = None
 
     model_config = {"from_attributes": True}
 

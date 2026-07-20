@@ -18,6 +18,7 @@ from app.schemas.claims import (
 )
 from app.auth.dependencies import get_current_user, _effective_scheme_id
 from app.services.rules_engine import run_rules_engine, run_full_adjudication
+from app.services.audit import log_audit
 from app.constants import Role, ClaimStatus
 from app.repositories import ClaimRepository
 
@@ -109,6 +110,13 @@ async def create_claim(
         )
         db.add(line)
 
+    log_audit(
+        db, "claim", claim.id, "create",
+        user_id=current_user.id, user_role=current_user.role,
+        scheme_id=claim.scheme_id,
+        entity_label=claim.claim_number,
+        new_value=json.dumps({"total_billed": total_billed, "status": claim.status}, default=str),
+    )
     await db.commit()
 
     result = await db.execute(load_claim_with_relations(db).where(Claim.id == claim.id))
@@ -226,14 +234,14 @@ async def _run_adjudication_background(claim_id: int, user_id: int) -> None:
         claim.adjudicated_by = user_id
         claim.adjudicated_at = datetime.now(timezone.utc)
         claim.updated_at = datetime.now(timezone.utc)
+        claim.modified_date = datetime.now(timezone.utc)
+        claim.modified_user = user_id
 
-        db.add(AuditLog(
-            user_id=user_id,
-            entity_type="claim",
-            entity_id=claim_id,
-            action="adjudicate",
+        log_audit(
+            db, "claim", claim_id, "adjudicate",
+            user_id=user_id, scheme_id=claim.scheme_id, entity_label=claim.claim_number,
             new_value=json.dumps({"status": claim.status, "total_approved": total_approved}),
-        ))
+        )
         await db.commit()
 
 
@@ -286,16 +294,16 @@ async def override_claim(
     old_status = claim.status
     claim.status = override_data.override_status
     claim.updated_at = datetime.now(timezone.utc)
+    claim.modified_date = datetime.now(timezone.utc)
+    claim.modified_user = current_user.id
 
-    audit = AuditLog(
-        user_id=current_user.id,
-        entity_type="claim",
-        entity_id=claim_id,
-        action="override",
+    log_audit(
+        db, "claim", claim_id, "override",
+        user_id=current_user.id, user_role=current_user.role,
+        scheme_id=claim.scheme_id, entity_label=claim.claim_number,
         old_value=json.dumps({"status": old_status}),
         new_value=json.dumps({"status": override_data.override_status, "reason": override_data.reason}),
     )
-    db.add(audit)
     await db.commit()
 
     result = await db.execute(load_claim_with_relations(db).where(Claim.id == claim_id))
