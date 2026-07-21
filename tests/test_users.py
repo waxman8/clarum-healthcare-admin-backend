@@ -3,6 +3,8 @@ from app.models.auth import User, Scheme, AuditLog
 from app.constants import Role, UserStatus
 from app.integrations.registry import get as get_integration
 from app.integrations.contracts import MessagingGateway
+from app.repositories.user_repository import UserRepository
+from app.services.user_service import UserService
 from sqlalchemy import select
 
 
@@ -165,6 +167,60 @@ async def test_self_deactivation_guard(client, auth_headers):
     resp = await client.patch(f"/api/v1/users/{admin_id}", json=payload, headers=auth_headers)
     assert resp.status_code == 400
     assert "Cannot deactivate yourself" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_list_users_paginates_without_changing_total(client, auth_headers):
+    for email in ("page.one@test.co.za", "page.two@test.co.za"):
+        resp = await client.post(
+            "/api/v1/users",
+            json={"email": email, "full_name": email, "role": Role.SCHEME_ADMIN},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201, resp.text
+
+    first_page = await client.get("/api/v1/users?skip=0&limit=1", headers=auth_headers)
+    second_page = await client.get("/api/v1/users?skip=1&limit=1", headers=auth_headers)
+
+    assert first_page.status_code == 200
+    assert second_page.status_code == 200
+    assert first_page.json()["total"] == 3
+    assert second_page.json()["total"] == 3
+    assert len(first_page.json()["items"]) == 1
+    assert len(second_page.json()["items"]) == 1
+    assert first_page.json()["items"][0]["id"] != second_page.json()["items"][0]["id"]
+
+
+@pytest.mark.asyncio
+async def test_deactivate_user_service_handles_missing_and_already_inactive_users(
+    db_session, seed_admin_user
+):
+    service = UserService(UserRepository(db_session), db_session)
+    target_user = User(
+        email="deactivate.target@test.co.za",
+        full_name="Deactivate Target",
+        role=Role.SCHEME_ADMIN,
+        scheme_id=seed_admin_user.scheme_id,
+        hashed_password="unused",
+        is_active=True,
+    )
+    db_session.add(target_user)
+    await db_session.commit()
+    await db_session.refresh(target_user)
+
+    assert await service.deactivate_user(9999, seed_admin_user) is False
+    assert await service.deactivate_user(target_user.id, seed_admin_user) is True
+    assert target_user.is_active is False
+    assert await service.deactivate_user(target_user.id, seed_admin_user) is True
+
+    result = await db_session.execute(
+        select(AuditLog).where(
+            AuditLog.entity_type == "user",
+            AuditLog.entity_id == target_user.id,
+            AuditLog.action == "deactivate",
+        )
+    )
+    assert result.scalars().all()
 
 
 @pytest.mark.asyncio
