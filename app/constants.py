@@ -34,6 +34,15 @@ class Role:
     CAN_RESOLVE_DISPUTE = [SUPER_ADMIN, SCHEME_ADMIN]
     CAN_CHANGE_THEME = [SUPER_ADMIN, SCHEME_ADMIN]
     CAN_OVERRIDE_CLAIM = [SUPER_ADMIN, SCHEME_ADMIN]
+    CAN_MANAGE_USERS = [SUPER_ADMIN]
+
+
+# ---------------------------------------------------------------------------
+# User statuses
+# ---------------------------------------------------------------------------
+class UserStatus:
+    ACTIVE = "active"
+    DEACTIVATED = "deactivated"
 
 
 # ---------------------------------------------------------------------------
