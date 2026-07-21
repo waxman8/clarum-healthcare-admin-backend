@@ -21,7 +21,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     with op.batch_alter_table('users', schema=None) as batch_op:
         batch_op.add_column(sa.Column('last_login_at', sa.DateTime(timezone=True), nullable=True))
-        batch_op.add_column(sa.Column('must_reset_password', sa.Boolean(), nullable=False, server_default=sa.text('0')))
+        batch_op.add_column(sa.Column('must_reset_password', sa.Boolean(), nullable=False, server_default=sa.text('false')))
 
 
 def downgrade() -> None:
