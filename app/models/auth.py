@@ -47,6 +47,8 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     scheme_id = Column(Integer, ForeignKey("schemes.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
+    must_reset_password = Column(Boolean, default=False, nullable=False)
 
     scheme = relationship("Scheme", back_populates="users")
     audit_logs = relationship("AuditLog", back_populates="user")

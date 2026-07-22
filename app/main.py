@@ -8,7 +8,7 @@ import traceback
 
 logger = logging.getLogger("app.startup")
 
-from app.routers import auth, members, providers, authorisations, claims, dashboard, schemes
+from app.routers import auth, members, providers, authorisations, claims, dashboard, schemes, users
 from app.routers import billing, chronic, disputes, reports, reference, plan_config, underwriting
 from app.routers import trustee, principal_officer, administrator_accredited
 from app.routers import managed_care_organisation_mco, external_auditor, statutory_actuary
@@ -102,6 +102,7 @@ app.include_router(authorisations.router)
 app.include_router(claims.router)
 app.include_router(dashboard.router)
 app.include_router(schemes.router)
+app.include_router(users.router)
 app.include_router(billing.router)
 app.include_router(chronic.router)
 app.include_router(disputes.router)
