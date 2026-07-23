@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, T
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.database import Base
+from app.models.mixins import MultiTenant
 
 
 class Scheme(Base):
@@ -71,13 +72,13 @@ class UserSchemeMembership(Base):
     scheme = relationship("Scheme")
 
 
-class AuditLog(Base):
+class AuditLog(Base, MultiTenant):
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    entity_type = Column(String(100), nullable=False)
+    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    entity_type = Column(String(100), nullable=False, index=True)
     entity_id = Column(Integer, nullable=True)
     action = Column(String(50), nullable=False)
     old_value = Column(Text, nullable=True)

@@ -18,7 +18,7 @@ from app.schemas.claims import (
 )
 from app.auth.dependencies import get_current_user, _effective_scheme_id
 from app.services.rules_engine import run_rules_engine, run_full_adjudication
-from app.constants import Role, ClaimStatus
+from app.constants import Role, ClaimStatus, AuditAction
 from app.repositories import ClaimRepository
 
 router = APIRouter(prefix="/api/v1/claims", tags=["claims"])
@@ -229,9 +229,10 @@ async def _run_adjudication_background(claim_id: int, user_id: int) -> None:
 
         db.add(AuditLog(
             user_id=user_id,
+            scheme_id=claim.scheme_id,
             entity_type="claim",
             entity_id=claim_id,
-            action="adjudicate",
+            action=AuditAction.ADJUDICATE,
             new_value=json.dumps({"status": claim.status, "total_approved": total_approved}),
         ))
         await db.commit()
@@ -289,9 +290,10 @@ async def override_claim(
 
     audit = AuditLog(
         user_id=current_user.id,
+        scheme_id=current_user.scheme_id,
         entity_type="claim",
         entity_id=claim_id,
-        action="override",
+        action=AuditAction.OVERRIDE,
         old_value=json.dumps({"status": old_status}),
         new_value=json.dumps({"status": override_data.override_status, "reason": override_data.reason}),
     )

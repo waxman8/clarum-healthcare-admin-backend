@@ -17,7 +17,7 @@ from app.schemas.chronic import (
     PaginatedChronicResponse,
 )
 from app.auth.dependencies import get_current_user, _effective_scheme_id
-from app.constants import Role, ChronicStatus
+from app.constants import Role, ChronicStatus, AuditAction
 
 router = APIRouter(prefix="/api/v1/chronic-registrations", tags=["chronic"])
 
@@ -55,9 +55,10 @@ async def create_chronic_registration(
 
     audit = AuditLog(
         user_id=current_user.id,
+        scheme_id=scheme_id,
         entity_type="chronic_registration",
         entity_id=reg.id,
-        action="create",
+        action=AuditAction.CREATE,
         new_value=json.dumps({"member_id": data.member_id, "icd10_code_id": data.icd10_code_id}),
     )
     db.add(audit)
@@ -172,9 +173,10 @@ async def decide_chronic_registration(
 
     audit = AuditLog(
         user_id=current_user.id,
+        scheme_id=current_user.scheme_id,
         entity_type="chronic_registration",
         entity_id=reg_id,
-        action="decide",
+        action=AuditAction.DECIDE,
         old_value=json.dumps({"status": old_status}),
         new_value=json.dumps({"status": decision.status}),
     )

@@ -35,6 +35,7 @@ class Role:
     CAN_CHANGE_THEME = [SUPER_ADMIN, SCHEME_ADMIN]
     CAN_OVERRIDE_CLAIM = [SUPER_ADMIN, SCHEME_ADMIN]
     CAN_MANAGE_USERS = [SUPER_ADMIN]
+    CAN_VIEW_AUDIT_LOG = [SUPER_ADMIN, SCHEME_ADMIN]
 
 
 # ---------------------------------------------------------------------------
@@ -171,3 +172,32 @@ class HospitalNetwork:
 class CopaymentType:
     PERCENTAGE = "PERCENTAGE"
     RAND_AMOUNT = "RAND_AMOUNT"
+
+
+# ---------------------------------------------------------------------------
+# Audit actions
+# ---------------------------------------------------------------------------
+class AuditAction:
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
+    DELETE = "DELETE"
+    TRANSITION = "TRANSITION"
+    LOGIN = "LOGIN"
+    LOGOUT = "LOGOUT"
+    
+    # Specialized actions
+    ROLE_CHANGE = "ROLE_CHANGE"
+    ACTIVATE = "ACTIVATE"
+    DEACTIVATE = "DEACTIVATE"
+    NAME_CHANGE = "NAME_CHANGE"
+    RESET = "RESET"
+    ADJUDICATE = "ADJUDICATE"
+    OVERRIDE = "OVERRIDE"
+    RESOLVE = "RESOLVE"
+    DECIDE = "DECIDE"
+
+    ALL = [
+        CREATE, UPDATE, DELETE, TRANSITION, LOGIN, LOGOUT,
+        ROLE_CHANGE, ACTIVATE, DEACTIVATE, NAME_CHANGE, RESET,
+        ADJUDICATE, OVERRIDE, RESOLVE, DECIDE
+    ]
