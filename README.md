@@ -208,3 +208,6 @@ gh pr create --title "Brief description of changes" --body "Details about implem
 - **Activity**: 15 claims, 9 authorisations.
 
 > **Note**: Data isolation is strictly enforced. Logging in as one scheme prevents access to any other scheme's members, claims, or financial data.
+
+
+v0.0.5
