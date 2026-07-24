@@ -16,6 +16,7 @@ from app.routers import compliance_officer, information_officer_popia
 from app.routers import employer_group, brokerage_fsp, broker_representative
 from app.routers import broker_commission_scale, broker_appointment_allocation
 from app.routers import member_employer_history
+from app.routers import recovery_cases
 # Import all models so SQLAlchemy Base.metadata and Alembic see every table
 from app.models import auth as auth_models  # noqa: F401
 from app.models import members as member_models  # noqa: F401
@@ -27,6 +28,7 @@ from app.models import underwriting as underwriting_models  # noqa: F401
 from app.models import scheme_governance as scheme_governance_models  # noqa: F401
 from app.models import employers as employer_models  # noqa: F401
 from app.models import intermediaries as intermediary_models  # noqa: F401
+from app.models import recovery as recovery_models  # noqa: F401
 
 def _run_migrations() -> None:
     """Run Alembic migrations in a separate thread with its own event loop.
@@ -127,6 +129,7 @@ app.include_router(broker_commission_scale.router)
 app.include_router(broker_appointment_allocation.router)
 # Member-Employer link table
 app.include_router(member_employer_history.router)
+app.include_router(recovery_cases.router)
 
 
 @app.get("/health")
