@@ -35,6 +35,7 @@ class Role:
     CAN_CHANGE_THEME = [SUPER_ADMIN, SCHEME_ADMIN]
     CAN_OVERRIDE_CLAIM = [SUPER_ADMIN, SCHEME_ADMIN]
     CAN_MANAGE_USERS = [SUPER_ADMIN]
+    CAN_MANAGE_RECOVERY_CASES = [SUPER_ADMIN, SCHEME_ADMIN, CLAIMS_PROCESSOR, FINANCE_OFFICER]
 
 
 # ---------------------------------------------------------------------------
@@ -87,6 +88,25 @@ class ClaimStatus:
     REJECTED = "rejected"
     PARTIAL = "partial"
     PAID = "paid"
+
+
+class RecoveryType:
+    COB = "COB"
+    RAF = "RAF"
+    COIDA = "COIDA"
+
+    ALL = [COB, RAF, COIDA]
+
+
+class RecoveryStatus:
+    IDENTIFIED = "IDENTIFIED"
+    SUBMITTED = "SUBMITTED"
+    PARTIALLY_RECEIVED = "PARTIALLY_RECEIVED"
+    RECEIVED = "RECEIVED"
+    DECLINED = "DECLINED"
+    WRITTEN_OFF = "WRITTEN_OFF"
+
+    TERMINAL = [RECEIVED, DECLINED, WRITTEN_OFF]
 
 
 # ---------------------------------------------------------------------------
