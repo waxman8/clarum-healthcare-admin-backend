@@ -1,6 +1,7 @@
-from pydantic import BaseModel
-from typing import Optional, List
 from datetime import date, datetime
+from typing import Optional, List
+
+from pydantic import BaseModel
 
 
 class DisputeCreate(BaseModel):
@@ -11,10 +12,14 @@ class DisputeCreate(BaseModel):
     date_received: Optional[date] = None  # defaults to today if omitted
 
 
-class DisputeResolve(BaseModel):
-    status: str  # UPHELD | DISMISSED | ESCALATED_TO_CMS
-    resolution: str
-    cms_reference: Optional[str] = None
+class DisputeTransition(BaseModel):
+    to_status: str  # NEW | INVESTIGATING | RESOLVED | REJECTED
+    resolution: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class DisputeCommentCreate(BaseModel):
+    comment: str
 
 
 class MemberSummary(BaseModel):
@@ -28,29 +33,42 @@ class MemberSummary(BaseModel):
 
 class DisputeResponse(BaseModel):
     id: int
-    scheme_id: int
     dispute_number: str
+    dispute_type: str
+    description: str
     member_id: int
     member: Optional[MemberSummary] = None
     claim_id: Optional[int] = None
-    dispute_type: str
-    description: str
     status: str
-    date_received: date
-    member_deadline: date
-    admin_deadline: date
+    status_changed_at: Optional[datetime] = None
+    sla_deadline: Optional[datetime] = None
+    created_at: datetime
+
+    # Legacy fields retained for backward compatibility.
+    scheme_id: Optional[int] = None
+    date_received: Optional[date] = None
+    member_deadline: Optional[date] = None
+    admin_deadline: Optional[date] = None
     resolution: Optional[str] = None
-    escalated_to_cms: bool
+    escalated_to_cms: Optional[bool] = None
     cms_reference: Optional[str] = None
     resolved_at: Optional[datetime] = None
-    created_at: datetime
 
     model_config = {"from_attributes": True}
 
 
-class PaginatedDisputesResponse(BaseModel):
+class DisputeListResponse(BaseModel):
     items: List[DisputeResponse]
     total: int
-    page: int
-    page_size: int
-    pages: int
+
+
+class DisputeCommentResponse(BaseModel):
+    id: int
+    comment: str
+    created_at: datetime
+    author_name: Optional[str] = None
+    created_by_name: Optional[str] = None
+
+
+class DisputeCommentListResponse(BaseModel):
+    items: List[DisputeCommentResponse]

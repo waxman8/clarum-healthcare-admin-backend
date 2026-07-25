@@ -12,6 +12,7 @@ Never use bare string literals for these in routers, services, or seeds.
 class Role:
     SUPER_ADMIN = "super_admin"
     SCHEME_ADMIN = "scheme_admin"
+    DISPUTES_OFFICER = "disputes_officer"
     CLAIMS_PROCESSOR = "claims_processor"
     AUTHORISATION_OFFICER = "authorisation_officer"
     FINANCE_OFFICER = "finance_officer"
@@ -21,6 +22,7 @@ class Role:
     ALL = [
         SUPER_ADMIN,
         SCHEME_ADMIN,
+        DISPUTES_OFFICER,
         CLAIMS_PROCESSOR,
         AUTHORISATION_OFFICER,
         FINANCE_OFFICER,
@@ -31,7 +33,7 @@ class Role:
     CAN_ADJUDICATE = [SUPER_ADMIN, SCHEME_ADMIN, CLAIMS_PROCESSOR]
     CAN_APPROVE_AUTH = [SUPER_ADMIN, SCHEME_ADMIN, AUTHORISATION_OFFICER]
     CAN_DECIDE_CHRONIC = [SUPER_ADMIN, SCHEME_ADMIN, CLAIMS_PROCESSOR]
-    CAN_RESOLVE_DISPUTE = [SUPER_ADMIN, SCHEME_ADMIN]
+    CAN_RESOLVE_DISPUTE = [SUPER_ADMIN, SCHEME_ADMIN, DISPUTES_OFFICER]
     CAN_CHANGE_THEME = [SUPER_ADMIN, SCHEME_ADMIN]
     CAN_OVERRIDE_CLAIM = [SUPER_ADMIN, SCHEME_ADMIN]
     CAN_MANAGE_USERS = [SUPER_ADMIN]
@@ -113,14 +115,20 @@ class ChronicStatus:
 # Dispute statuses  (UPPERCASE — matches CMS reporting convention)
 # ---------------------------------------------------------------------------
 class DisputeStatus:
-    OPEN = "OPEN"
-    UNDER_REVIEW = "UNDER_REVIEW"
-    UPHELD = "UPHELD"
-    DISMISSED = "DISMISSED"
-    ESCALATED_TO_CMS = "ESCALATED_TO_CMS"
+    NEW = "NEW"
+    INVESTIGATING = "INVESTIGATING"
+    RESOLVED = "RESOLVED"
+    REJECTED = "REJECTED"
 
-    OPEN_STATUSES = [OPEN, UNDER_REVIEW]
-    VALID_RESOLUTIONS = [UPHELD, DISMISSED, ESCALATED_TO_CMS]
+    OPEN_STATUSES = [NEW, INVESTIGATING]
+    TERMINAL_STATUSES = [RESOLVED, REJECTED]
+
+    # Legacy statuses still seen in older data; mapped in dispute router/migrations.
+    LEGACY_OPEN = "OPEN"
+    LEGACY_UNDER_REVIEW = "UNDER_REVIEW"
+    LEGACY_UPHELD = "UPHELD"
+    LEGACY_DISMISSED = "DISMISSED"
+    LEGACY_ESCALATED_TO_CMS = "ESCALATED_TO_CMS"
 
 
 # ---------------------------------------------------------------------------

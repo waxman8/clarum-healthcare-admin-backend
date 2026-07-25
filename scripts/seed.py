@@ -7,7 +7,7 @@ import random
 import json
 import os
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 # Add project root to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -23,6 +23,7 @@ from app.models.providers import Provider
 from app.models.authorisations import Authorisation, AuthorisationLine
 from app.models.claims import Claim, ClaimLine
 from app.models import billing as _billing_models  # noqa: F401 — registers billing mapper classes
+from app.models.billing import Dispute, DisputeComment, DisputeStatusHistory
 from app.auth.security import get_password_hash
 from app.config import settings
 
@@ -239,6 +240,7 @@ async def seed_database():
             ("authorisationofficer@demohealth.co.za", "Authorisation Officer", "authorisation_officer"),
             ("finance@demohealth.co.za", "Finance Officer", "finance_officer"),
             ("callcentre@demohealth.co.za", "Call Centre Agent", "call_centre_agent"),
+            ("disputesofficer@demohealth.co.za", "Disputes Officer", "disputes_officer"),
         ]
         users = []
         for email, full_name, role in users_data:
@@ -255,6 +257,7 @@ async def seed_database():
         await db.flush()
         admin_user = users[0]
         claims_user = users[2]
+        disputes_user = users[6]
 
         print("Creating ICD-10 codes...")
         icd10_codes = [
@@ -675,6 +678,7 @@ async def seed_database():
         random.shuffle(claim_statuses)
 
         claim_types = ["medical", "hospital", "pharmacy", "dental", "specialist"]
+        created_claims = []
 
         for i, claim_status in enumerate(claim_statuses):
             member = random.choice(active_members)
@@ -728,6 +732,7 @@ async def seed_database():
             )
             db.add(claim)
             await db.flush()
+            created_claims.append(claim)
 
             # Add claim lines
             num_lines = random.randint(1, 4)
@@ -779,15 +784,103 @@ async def seed_database():
                 )
                 db.add(line)
 
+        print("Creating disputes...")
+        dispute_statuses = ["NEW", "INVESTIGATING", "RESOLVED", "REJECTED"]
+        dispute_types = ["CLAIM_REJECTION", "BENEFIT_LIMIT", "AUTHORISATION", "CONTRIBUTION"]
+        now = datetime.now(timezone.utc)
+        for i, dispute_status in enumerate(dispute_statuses):
+            member = random.choice(active_members)
+            related_claim = random.choice(created_claims) if created_claims else None
+            date_received = date.today() - timedelta(days=12 + i)
+            admin_deadline = date_received + timedelta(days=30)
+            member_deadline = date_received + timedelta(days=90)
+
+            dispute = Dispute(
+                scheme_id=scheme.id,
+                dispute_number=f"DIS-{scheme.code}-{date.today().strftime('%Y%m')}-{i + 1:05d}",
+                member_id=member.id,
+                claim_id=related_claim.id if related_claim else None,
+                dispute_type=dispute_types[i % len(dispute_types)],
+                description=f"Seed dispute {i + 1} for CLARUM-18 workflow validation.",
+                status=dispute_status,
+                status_changed_at=now - timedelta(days=i),
+                sla_deadline=datetime.combine(admin_deadline, datetime.min.time(), tzinfo=timezone.utc),
+                date_received=date_received,
+                member_deadline=member_deadline,
+                admin_deadline=admin_deadline,
+                resolution="Resolved as per policy." if dispute_status == "RESOLVED" else None,
+                transition_reason="Policy exclusion applies." if dispute_status == "REJECTED" else None,
+                created_by=admin_user.id,
+                resolved_by=admin_user.id if dispute_status in ["RESOLVED", "REJECTED"] else None,
+                resolved_at=(now - timedelta(days=i)) if dispute_status in ["RESOLVED", "REJECTED"] else None,
+            )
+            db.add(dispute)
+            await db.flush()
+
+            db.add(
+                DisputeStatusHistory(
+                    dispute_id=dispute.id,
+                    from_status=None,
+                    to_status=dispute_status,
+                    changed_by=admin_user.id,
+                    changed_at=dispute.status_changed_at,
+                )
+            )
+            db.add(
+                DisputeComment(
+                    dispute_id=dispute.id,
+                    comment=f"Initial comment for {dispute_status.lower()} dispute.",
+                    created_by=disputes_user.id,
+                    created_at=dispute.status_changed_at,
+                )
+            )
+
+        # At least one overdue dispute for SLA countdown tests.
+        overdue = Dispute(
+            scheme_id=scheme.id,
+            dispute_number=f"DIS-{scheme.code}-{date.today().strftime('%Y%m')}-99999",
+            member_id=random.choice(active_members).id,
+            claim_id=(random.choice(created_claims).id if created_claims else None),
+            dispute_type="CLAIM_REJECTION",
+            description="Overdue dispute seed row (SLA breached).",
+            status="INVESTIGATING",
+            status_changed_at=now - timedelta(days=10),
+            date_received=date.today() - timedelta(days=45),
+            admin_deadline=date.today() - timedelta(days=15),
+            member_deadline=date.today() + timedelta(days=45),
+            sla_deadline=datetime.combine(date.today() - timedelta(days=15), datetime.min.time(), tzinfo=timezone.utc),
+            created_by=admin_user.id,
+        )
+        db.add(overdue)
+        await db.flush()
+        db.add(
+            DisputeStatusHistory(
+                dispute_id=overdue.id,
+                from_status=None,
+                to_status="INVESTIGATING",
+                changed_by=admin_user.id,
+                changed_at=overdue.status_changed_at,
+            )
+        )
+        db.add(
+            DisputeComment(
+                dispute_id=overdue.id,
+                comment="SLA breach expected for FE countdown testing.",
+                created_by=disputes_user.id,
+                created_at=now - timedelta(days=1),
+            )
+        )
+
         await db.commit()
         print("Seed data created successfully!")
         print("\nLogin credentials:")
-        print("  admin@demohealth.co.za / Demo@1234 (super_admin)")
-        print("  schemeadmin@demohealth.co.za / Demo@1234 (scheme_admin)")
-        print("  claims@demohealth.co.za / Demo@1234 (claims_processor)")
-        print("  auth@demohealth.co.za / Demo@1234 (authorisation_officer)")
-        print("  finance@demohealth.co.za / Demo@1234 (finance_officer)")
-        print("  callcentre@demohealth.co.za / Demo@1234 (call_centre_agent)")
+        print("  superadmin@demohealth.co.za / DHMS@1234 (super_admin)")
+        print("  schemeadmin@demohealth.co.za / DHMS@1234 (scheme_admin)")
+        print("  disputesofficer@demohealth.co.za / DHMS@1234 (disputes_officer)")
+        print("  claimsprocessor@demohealth.co.za / DHMS@1234 (claims_processor)")
+        print("  authorisationofficer@demohealth.co.za / DHMS@1234 (authorisation_officer)")
+        print("  finance@demohealth.co.za / DHMS@1234 (finance_officer)")
+        print("  callcentre@demohealth.co.za / DHMS@1234 (call_centre_agent)")
 
 
 if __name__ == "__main__":
