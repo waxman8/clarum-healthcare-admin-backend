@@ -455,13 +455,13 @@ async def seed_commission_scales(db: AsyncSession, sid: int):
         print("  Commission Scales: already seeded")
         return
     scales = [
-        {"member_type": "PRINCIPAL", "commission_amount_cents": 10761, "regulatory_max_cents": 10761},
-        {"member_type": "ADULT_DEPENDANT", "commission_amount_cents": 10761, "regulatory_max_cents": 10761},
-        {"member_type": "CHILD_DEPENDANT", "commission_amount_cents": 5381, "regulatory_max_cents": 5381},
+        {"member_type": "PRINCIPAL", "commission_amount_cents": 10761, "max_pmpm_cents": 10761},
+        {"member_type": "ADULT_DEPENDANT", "commission_amount_cents": 10761, "max_pmpm_cents": 10761},
+        {"member_type": "CHILD_DEPENDANT", "commission_amount_cents": 5381, "max_pmpm_cents": 5381},
     ]
     for s in scales:
         db.add(BrokerCommissionScale(
-            scheme_id=sid, vat_inclusive=False, effective_date=date(2026, 1, 1),
+            scheme_id=sid, vat_inclusive=False, effective_from=date(2026, 1, 1),
             notes="CMS Reg.28 maximum for 2026.", created_at=NOW, updated_at=NOW, **s,
         ))
     await db.flush()

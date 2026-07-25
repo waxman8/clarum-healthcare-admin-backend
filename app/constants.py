@@ -162,3 +162,10 @@ class HospitalNetwork:
 class CopaymentType:
     PERCENTAGE = "PERCENTAGE"
     RAND_AMOUNT = "RAND_AMOUNT"
+
+
+# ---------------------------------------------------------------------------
+# Regulatory Limits
+# ---------------------------------------------------------------------------
+class RegulatoryLimits:
+    CMS_REG28_MAX_PMPM_CENTS_EXCL_VAT = 10761  # R107.61

@@ -526,9 +526,9 @@ async def seed_commission_scales(db: AsyncSession, scheme_id: int):
 
     # CMS Reg.28 max is R107.61 + VAT (= R123.75) per principal member per month as of 2026
     scales = [
-        {"member_type": "PRINCIPAL", "commission_amount_cents": 10761, "regulatory_max_cents": 10761},
-        {"member_type": "ADULT_DEPENDANT", "commission_amount_cents": 10761, "regulatory_max_cents": 10761},
-        {"member_type": "CHILD_DEPENDANT", "commission_amount_cents": 5381, "regulatory_max_cents": 5381},
+        {"member_type": "PRINCIPAL", "commission_amount_cents": 10761, "max_pmpm_cents": 10761},
+        {"member_type": "ADULT_DEPENDANT", "commission_amount_cents": 10761, "max_pmpm_cents": 10761},
+        {"member_type": "CHILD_DEPENDANT", "commission_amount_cents": 5381, "max_pmpm_cents": 5381},
     ]
 
     for s in scales:
@@ -537,8 +537,8 @@ async def seed_commission_scales(db: AsyncSession, scheme_id: int):
             member_type=s["member_type"],
             commission_amount_cents=s["commission_amount_cents"],
             vat_inclusive=False,
-            effective_date=date(2026, 1, 1),
-            regulatory_max_cents=s["regulatory_max_cents"],
+            effective_from=date(2026, 1, 1),
+            max_pmpm_cents=s["max_pmpm_cents"],
             notes="CMS Reg.28 maximum. VAT added at payment time.",
             created_at=NOW, updated_at=NOW,
         ))
