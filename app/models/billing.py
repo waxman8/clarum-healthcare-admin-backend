@@ -270,10 +270,13 @@ class Dispute(Base):
     description = Column(Text, nullable=False)
     status = Column(String(20), nullable=False, default="OPEN")
     # OPEN | UNDER_REVIEW | UPHELD | DISMISSED | ESCALATED_TO_CMS
+    status_changed_at = Column(DateTime(timezone=True), nullable=True)
+    sla_deadline = Column(DateTime(timezone=True), nullable=True)
     date_received = Column(Date, nullable=False)
     member_deadline = Column(Date, nullable=False)   # date_received + 90 days (MSA)
     admin_deadline = Column(Date, nullable=False)    # date_received + 30 days (MSA)
     resolution = Column(Text, nullable=True)
+    transition_reason = Column(Text, nullable=True)
     escalated_to_cms = Column(Boolean, default=False)
     cms_reference = Column(String(100), nullable=True)
     resolved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -287,3 +290,34 @@ class Dispute(Base):
     claim = relationship("Claim")
     resolved_by_user = relationship("User", foreign_keys=[resolved_by])
     created_by_user = relationship("User", foreign_keys=[created_by])
+    comments = relationship("DisputeComment", back_populates="dispute", cascade="all, delete-orphan")
+    status_history = relationship("DisputeStatusHistory", back_populates="dispute", cascade="all, delete-orphan")
+
+
+class DisputeComment(Base):
+    __tablename__ = "dispute_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    dispute_id = Column(Integer, ForeignKey("disputes.id"), nullable=False, index=True)
+    comment = Column(Text, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    dispute = relationship("Dispute", back_populates="comments")
+    created_by_user = relationship("User")
+
+
+class DisputeStatusHistory(Base):
+    __tablename__ = "dispute_status_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    dispute_id = Column(Integer, ForeignKey("disputes.id"), nullable=False, index=True)
+    from_status = Column(String(20), nullable=True)
+    to_status = Column(String(20), nullable=False)
+    reason = Column(Text, nullable=True)
+    resolution = Column(Text, nullable=True)
+    changed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    changed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    dispute = relationship("Dispute", back_populates="status_history")
+    changed_by_user = relationship("User")

@@ -10,11 +10,12 @@ from app.constants import (
 def test_role_all_contains_all_roles():
     assert Role.SUPER_ADMIN in Role.ALL
     assert Role.SCHEME_ADMIN in Role.ALL
+    assert Role.DISPUTES_OFFICER in Role.ALL
     assert Role.CLAIMS_PROCESSOR in Role.ALL
     assert Role.AUTHORISATION_OFFICER in Role.ALL
     assert Role.FINANCE_OFFICER in Role.ALL
     assert Role.CALL_CENTRE_AGENT in Role.ALL
-    assert len(Role.ALL) == 6
+    assert len(Role.ALL) == 7
 
 
 def test_role_permission_groups_are_subsets():
@@ -29,14 +30,14 @@ def test_role_permission_groups_are_subsets():
 
 
 def test_dispute_open_statuses():
-    assert DisputeStatus.OPEN in DisputeStatus.OPEN_STATUSES
-    assert DisputeStatus.UNDER_REVIEW in DisputeStatus.OPEN_STATUSES
-    assert DisputeStatus.UPHELD not in DisputeStatus.OPEN_STATUSES
+    assert DisputeStatus.NEW in DisputeStatus.OPEN_STATUSES
+    assert DisputeStatus.INVESTIGATING in DisputeStatus.OPEN_STATUSES
+    assert DisputeStatus.RESOLVED not in DisputeStatus.OPEN_STATUSES
 
 
 def test_dispute_valid_resolutions_excludes_open():
     for s in DisputeStatus.OPEN_STATUSES:
-        assert s not in DisputeStatus.VALID_RESOLUTIONS
+        assert s not in DisputeStatus.TERMINAL_STATUSES
 
 
 def test_benefit_bucket_not_decremented():

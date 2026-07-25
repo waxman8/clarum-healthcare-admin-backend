@@ -159,6 +159,7 @@ async def seed_mdv():
         users_data = [
             ("superadmin@mdvhealth.co.za", "MDV Super Admin", "super_admin"),
             ("schemeadmin@mdvhealth.co.za", "MDV Scheme Administrator", "scheme_admin"),
+            ("disputesofficer@mdvhealth.co.za", "MDV Disputes Officer", "disputes_officer"),
             ("claimsprocessor@mdvhealth.co.za", "MDV Claims Processor", "claims_processor"),
             ("authorisationofficer@mdvhealth.co.za", "MDV Authorisation Officer", "authorisation_officer"),
             ("finance@mdvhealth.co.za", "MDV Finance Officer", "finance_officer"),
@@ -564,6 +565,7 @@ async def seed_mdv():
         print("\nLogin credentials (password: MDVH@1234):")
         print("  superadmin@mdvhealth.co.za       — super_admin")
         print("  schemeadmin@mdvhealth.co.za — scheme_admin")
+        print("  disputesofficer@mdvhealth.co.za      — disputes_officer")
         print("  claimsprocessor@mdvhealth.co.za      — claims_processor")
         print("  authorisationofficer@mdvhealth.co.za        — authorisation_officer")
         print("  finance@mdvhealth.co.za     — finance_officer")
