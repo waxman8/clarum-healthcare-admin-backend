@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 import logging
 
@@ -28,42 +29,33 @@ from app.models import scheme_governance as scheme_governance_models  # noqa: F4
 from app.models import employers as employer_models  # noqa: F401
 from app.models import intermediaries as intermediary_models  # noqa: F401
 
-def _run_migrations() -> None:
-    """Run Alembic migrations in a separate thread with its own event loop.
-    This avoids the 'cannot nest asyncio.run()' problem inside uvicorn's loop."""
-    import concurrent.futures
+def run_migrations():
+    """Run Alembic migrations synchronously."""
     import os
     from alembic.config import Config
     from alembic import command
-
-    def _migrate():
-        alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
-        alembic_cfg.set_main_option(
-            "script_location",
-            os.path.join(os.path.dirname(__file__), "..", "alembic"),
-        )
+    
+    logger.info("Running Alembic migrations...")
+    try:
+        # Base directory is healthcare-admin-backend/
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        alembic_cfg = Config(os.path.join(base_dir, "alembic.ini"))
+        alembic_cfg.set_main_option("script_location", os.path.join(base_dir, "alembic"))
+        
+        # Synchronous call is safer for Vercel's execution model during startup
         command.upgrade(alembic_cfg, "head")
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(_migrate)
-        try:
-            # Wait for migrations with a timeout to prevent indefinite hang
-            future.result(timeout=60)
-        except concurrent.futures.TimeoutError:
-            logger.error("Migrations timed out after 60 seconds.")
-            # We don't raise here so the app can at least try to start,
-            # though it might fail later if tables are missing.
+        logger.info("Migrations complete.")
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        raise e
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Running Alembic migrations...")
-    try:
-        _run_migrations()
-        logger.info("Migrations complete.")
-    except Exception as e:
-        logger.error(f"Migration failed: {e}")
-        raise
+    # Run migrations in a separate thread to avoid blocking the main event loop
+    # and to allow asyncio.run() to work inside alembic/env.py
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, run_migrations)
     yield
 
 

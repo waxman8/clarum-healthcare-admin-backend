@@ -60,6 +60,25 @@ class MemberStatus:
 
 
 # ---------------------------------------------------------------------------
+# Member communication preferences
+# ---------------------------------------------------------------------------
+class CommunicationChannel:
+    SMS = "SMS"
+    EMAIL = "EMAIL"
+    POST = "POST"
+
+    ALL = [SMS, EMAIL, POST]
+
+
+class CommunicationCategory:
+    BILLING = "BILLING"
+    WELLNESS = "WELLNESS"
+    GENERAL = "GENERAL"
+
+    ALL = [BILLING, WELLNESS, GENERAL]
+
+
+# ---------------------------------------------------------------------------
 # Claim statuses
 # ---------------------------------------------------------------------------
 class ClaimStatus:

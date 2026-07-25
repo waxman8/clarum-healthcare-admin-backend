@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Date, Text
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Date, Text, UniqueConstraint
 from sqlalchemy.orm import relationship as sa_relationship
 from datetime import datetime, timezone
 from app.database import Base
+from app.models.mixins import MultiTenant, Auditable
 
 
 class Member(Base):
@@ -42,6 +43,7 @@ class Member(Base):
     savings_account = sa_relationship("SavingsAccount", back_populates="member", uselist=False)
     chronic_registrations = sa_relationship("ChronicRegistration", back_populates="member")
     disputes = sa_relationship("Dispute", back_populates="member")
+    communication_preferences = sa_relationship("MemberCommunicationPreference", back_populates="member")
 
 
 class Dependant(Base):
@@ -92,3 +94,18 @@ class MemberStatusHistory(Base):
 
     member = sa_relationship("Member", back_populates="status_history")
     changed_by_user = sa_relationship("User")
+
+
+class MemberCommunicationPreference(Base, MultiTenant, Auditable):
+    __tablename__ = "member_communication_prefs"
+    __table_args__ = (
+        UniqueConstraint("member_id", "channel", "category", name="uq_member_comm_pref"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=False, index=True)
+    channel = Column(String(20), nullable=False)
+    category = Column(String(20), nullable=False)
+    is_opted_in = Column(Boolean, nullable=False, default=True)
+
+    member = sa_relationship("Member", back_populates="communication_preferences")
