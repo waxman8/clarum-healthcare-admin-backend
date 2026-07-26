@@ -1,7 +1,7 @@
 """Claim repository — all Claim/ClaimLine queries in one place."""
 import math
 from datetime import date
-from typing import Optional
+from typing import List, Optional
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -88,6 +88,22 @@ class ClaimRepository:
             "page_size": page_size,
             "pages": math.ceil(total / page_size) if total > 0 else 1,
         }
+
+    async def list_by_member_period(
+        self,
+        member_id: int,
+        period_from: date,
+        period_to: date,
+    ) -> List[Claim]:
+        q = (
+            self._base_query()
+            .where(Claim.member_id == member_id)
+            .where(Claim.date_of_service_to >= period_from)
+            .where(Claim.date_of_service_from <= period_to)
+            .order_by(Claim.dependant_id, Claim.date_of_service_from, Claim.id)
+        )
+        result = await self.db.execute(q)
+        return result.scalars().all()
 
     async def count_by_status(self, scheme_id: int, *statuses: str) -> int:
         result = await self.db.execute(

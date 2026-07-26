@@ -1,0 +1,143 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @page { size: A4 landscape; margin: 15mm; }
+      body { font-family: Arial, sans-serif; font-size: 10px; color: #1f2937; }
+      h1 { font-size: 20px; margin: 0 0 2px; }
+      h2 { font-size: 15px; margin: 0 0 10px; }
+      h3 { font-size: 12px; margin: 12px 0 6px; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border: 1px solid #d1d5db; padding: 4px 6px; vertical-align: top; }
+      thead th { background: #eaf2fa; font-weight: 700; text-align: left; }
+      .header-table td { background: #f8fafc; }
+      .claims-table { table-layout: fixed; }
+      .claims-table th:nth-child(1), .claims-table td:nth-child(1) { width: 11%; }
+      .claims-table th:nth-child(2), .claims-table td:nth-child(2) { width: 10%; }
+      .claims-table th:nth-child(3), .claims-table td:nth-child(3) { width: 18%; }
+      .claims-table th:nth-child(4), .claims-table td:nth-child(4) { width: 10%; }
+      .claims-table th:nth-child(5), .claims-table td:nth-child(5) { width: 15%; }
+      .claims-table th:nth-child(6), .claims-table td:nth-child(6) { width: 9%; }
+      .claims-table th:nth-child(7), .claims-table td:nth-child(7) { width: 9%; }
+      .claims-table th:nth-child(8), .claims-table td:nth-child(8) { width: 11%; }
+      .claims-table th:nth-child(9), .claims-table td:nth-child(9) { width: 7%; }
+      .claims-table th:nth-child(n+6),
+      .claims-table td:nth-child(n+6),
+      .balance-table th:nth-child(n+2),
+      .balance-table td:nth-child(n+2) { text-align: right; }
+      .num { text-align: right; white-space: nowrap; }
+      .totals-row td { background: #f8fafc; font-weight: 700; }
+      .grand-totals { margin: 8px 0 12px; }
+      .grand-totals td { background: #d6e8f7; font-weight: 700; }
+      .grand-totals .label { width: 60%; text-align: left; }
+    </style>
+  </head>
+  <body>
+    <h1>{{ member.scheme.name if member.scheme else "Scheme" }}</h1>
+    <h2>Member Claims Statement</h2>
+
+    <table class="header-table">
+      <tbody>
+        <tr>
+          <td><b>Member Name</b></td>
+          <td>{{ member.first_name }} {{ member.surname }}</td>
+          <td><b>Membership No.</b></td>
+          <td>{{ member.membership_number }}</td>
+        </tr>
+        <tr>
+          <td><b>ID / Passport</b></td>
+          <td>{{ member.id_number or member.passport_number or "-" }}</td>
+          <td><b>Statement Period</b></td>
+          <td>{{ period_text }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    {% for section in payload.sections %}
+    <h3>{{ section.title }}</h3>
+    <table class="claims-table">
+      <thead>
+        <tr>
+          <th>Claim Ref</th>
+          <th>Date of Service</th>
+          <th>Provider</th>
+          <th>ICD-10</th>
+          <th>Tariff Codes</th>
+          <th>Billed</th>
+          <th>Approved</th>
+          <th>Member Liability</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in section.rows %}
+        <tr>
+          <td>{{ row.claim_ref }}</td>
+          <td>{{ row.date_of_service }}</td>
+          <td>{{ row.provider }}</td>
+          <td>{{ row.icd10 }}</td>
+          <td>{{ row.tariff_codes }}</td>
+          <td class="num">{{ format_currency(row.billed) }}</td>
+          <td class="num">{{ format_currency(row.approved) }}</td>
+          <td class="num">{{ format_currency(row.member_liability) }}</td>
+          <td>{{ row.status }}</td>
+        </tr>
+        {% endfor %}
+        <tr class="totals-row">
+          <td colspan="4"></td>
+          <td>Section Total</td>
+          <td class="num">{{ format_currency(section.totals.billed) }}</td>
+          <td class="num">{{ format_currency(section.totals.approved) }}</td>
+          <td class="num">{{ format_currency(section.totals.member_liability) }}</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+    {% endfor %}
+
+    {% if not payload.sections %}
+    <div style="margin-top:8px; margin-bottom:8px; padding:8px; border:1px solid #d1d5db; background:#f8fafc;">
+      No claims in period.
+    </div>
+    {% endif %}
+
+    <table class="grand-totals">
+      <tr>
+        <td class="label">Grand Total</td>
+        <td class="num">{{ format_currency(payload.grand_totals.billed) }}</td>
+        <td class="num">{{ format_currency(payload.grand_totals.approved) }}</td>
+        <td class="num">{{ format_currency(payload.grand_totals.member_liability) }}</td>
+      </tr>
+    </table>
+
+    {% if payload.benefit_balances %}
+    <h3>Benefit Balance Snapshot</h3>
+    <table class="balance-table">
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Opening</th>
+          <th>Used</th>
+          <th>Reserved</th>
+          <th>Available</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in payload.benefit_balances %}
+        <tr>
+          <td>{{ b.category }}</td>
+          <td class="num">{{ format_currency(b.opening) }}</td>
+          <td class="num">{{ format_currency(b.used) }}</td>
+          <td class="num">{{ format_currency(b.reserved) }}</td>
+          <td class="num">{{ format_currency(b.available) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <h3>Benefit Balance Snapshot</h3>
+    <p>No benefit-balance records found for this benefit year.</p>
+    {% endif %}
+  </body>
+</html>

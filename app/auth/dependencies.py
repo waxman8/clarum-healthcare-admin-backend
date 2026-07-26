@@ -34,9 +34,11 @@ async def get_current_user(
     if user is None or not user.is_active:
         raise credentials_exception
 
-    # Attach session-scoped scheme_id from JWT (non-mapped attribute — safe from SQLAlchemy autoflush)
+    # Attach session-scoped scheme_id/member_id from JWT
     scheme_id_from_token = payload.get("scheme_id")
     user._session_scheme_id = int(scheme_id_from_token) if scheme_id_from_token is not None else None
+    member_id_from_token = payload.get("member_id")
+    user._session_member_id = int(member_id_from_token) if member_id_from_token is not None else None
 
     return user
 

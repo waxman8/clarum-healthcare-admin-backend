@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
@@ -22,11 +22,23 @@ from app.schemas.members import (
 )
 from app.auth.dependencies import get_current_user, _effective_scheme_id
 from app.models.billing import MemberContribution
+from app.constants import Role
+from app.services.claims_statement_service import (
+    generate_staff_claims_statement_pdf,
+    resolve_statement_period,
+)
 from app.services.member_communication_preference_service import (
     MemberCommunicationPreferenceService,
 )
 
 router = APIRouter(prefix="/api/v1/members", tags=["members"])
+
+CLAIMS_STATEMENT_ROLES = {
+    Role.CALL_CENTRE_AGENT,
+    Role.CLAIMS_PROCESSOR,
+    Role.SCHEME_ADMIN,
+    Role.SUPER_ADMIN,
+}
 
 
 def scheme_filter(query, current_user: User, model=Member):
@@ -468,6 +480,43 @@ async def get_member_contributions(
         "months": months,
         "next_collection": entry_to_dict(next_entry) if next_entry else None,
     }
+
+
+@router.get("/{member_id}/claims-statement.pdf")
+async def download_member_claims_statement_pdf(
+    member_id: int,
+    period_from: Optional[date] = Query(
+        None,
+        alias="from",
+        title="Date from (YYYY-MM-DD)",
+        description="Date from (YYYY-MM-DD)",
+    ),
+    period_to: Optional[date] = Query(
+        None,
+        alias="to",
+        title="Date to (YYYY-MM-DD)",
+        description="Date to (YYYY-MM-DD)",
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role not in CLAIMS_STATEMENT_ROLES:
+        raise HTTPException(status_code=403, detail="Not authorised to download claims statements")
+
+    statement_from, statement_to = resolve_statement_period(period_from, period_to)
+    pdf_bytes, filename = await generate_staff_claims_statement_pdf(
+        db=db,
+        current_user=current_user,
+        member_id=member_id,
+        period_from=statement_from,
+        period_to=statement_to,
+    )
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/search", response_model=PaginatedMembersResponse)
