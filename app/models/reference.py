@@ -55,6 +55,16 @@ class RejectionCode(Base):
     category = Column(String(100), nullable=False)
 
 
+class ConsentPurpose(Base):
+    """POPIA consent purposes — enum-seeded reference table."""
+    __tablename__ = "consent_purposes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), unique=True, nullable=False, index=True)
+    description = Column(String(255), nullable=False)
+    is_active = Column(Boolean, default=True)
+
+
 class PlanOption(Base):
     __tablename__ = "plan_options"
 

@@ -239,6 +239,7 @@ async def seed_database():
             ("authorisationofficer@demohealth.co.za", "Authorisation Officer", "authorisation_officer"),
             ("finance@demohealth.co.za", "Finance Officer", "finance_officer"),
             ("callcentre@demohealth.co.za", "Call Centre Agent", "call_centre_agent"),
+            ("infoofficer@demohealth.co.za", "Information Officer", "info_officer"),
         ]
         users = []
         for email, full_name, role in users_data:
@@ -788,6 +789,7 @@ async def seed_database():
         print("  auth@demohealth.co.za / Demo@1234 (authorisation_officer)")
         print("  finance@demohealth.co.za / Demo@1234 (finance_officer)")
         print("  callcentre@demohealth.co.za / Demo@1234 (call_centre_agent)")
+        print("  infoofficer@demohealth.co.za / Demo@1234 (info_officer)")
 
 
 if __name__ == "__main__":

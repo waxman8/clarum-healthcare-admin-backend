@@ -17,6 +17,7 @@ class Role:
     FINANCE_OFFICER = "finance_officer"
     FINANCE_ADMIN = "finance_admin"
     CALL_CENTRE_AGENT = "call_centre_agent"
+    INFO_OFFICER = "info_officer"
 
     ALL = [
         SUPER_ADMIN,
@@ -25,6 +26,7 @@ class Role:
         AUTHORISATION_OFFICER,
         FINANCE_OFFICER,
         CALL_CENTRE_AGENT,
+        INFO_OFFICER,
     ]
 
     # Common permission groups
@@ -34,6 +36,7 @@ class Role:
     CAN_RESOLVE_DISPUTE = [SUPER_ADMIN, SCHEME_ADMIN]
     CAN_CHANGE_THEME = [SUPER_ADMIN, SCHEME_ADMIN]
     CAN_OVERRIDE_CLAIM = [SUPER_ADMIN, SCHEME_ADMIN]
+    CAN_RECORD_CONSENT = [SUPER_ADMIN, SCHEME_ADMIN, INFO_OFFICER, CALL_CENTRE_AGENT]
 
 
 # ---------------------------------------------------------------------------
@@ -162,3 +165,33 @@ class HospitalNetwork:
 class CopaymentType:
     PERCENTAGE = "PERCENTAGE"
     RAND_AMOUNT = "RAND_AMOUNT"
+
+
+# ---------------------------------------------------------------------------
+# POPIA consent purposes
+# ---------------------------------------------------------------------------
+class ConsentPurpose:
+    GENERAL = "GENERAL"
+    MARKETING = "MARKETING"
+    SHARE_WITH_ADMIN = "SHARE_WITH_ADMIN"
+    SHARE_WITH_REINSURER = "SHARE_WITH_REINSURER"
+    MEDICAL_HISTORY_ANALYTICS = "MEDICAL_HISTORY_ANALYTICS"
+    THIRD_PARTY_RESEARCH = "THIRD_PARTY_RESEARCH"
+
+    ALL = [
+        GENERAL,
+        MARKETING,
+        SHARE_WITH_ADMIN,
+        SHARE_WITH_REINSURER,
+        MEDICAL_HISTORY_ANALYTICS,
+        THIRD_PARTY_RESEARCH,
+    ]
+
+    DESCRIPTIONS = {
+        GENERAL: "General processing of personal information for scheme administration",
+        MARKETING: "Marketing and member communications",
+        SHARE_WITH_ADMIN: "Sharing data with the scheme's administrator",
+        SHARE_WITH_REINSURER: "Sharing data with reinsurers",
+        MEDICAL_HISTORY_ANALYTICS: "Use of medical history for analytics",
+        THIRD_PARTY_RESEARCH: "Sharing data with third parties for research",
+    }

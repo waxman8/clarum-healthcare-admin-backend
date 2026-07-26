@@ -163,6 +163,7 @@ async def seed_mdv():
             ("authorisationofficer@mdvhealth.co.za", "MDV Authorisation Officer", "authorisation_officer"),
             ("finance@mdvhealth.co.za", "MDV Finance Officer", "finance_officer"),
             ("callcentre@mdvhealth.co.za", "MDV Call Centre Agent", "call_centre_agent"),
+            ("infoofficer@mdvhealth.co.za", "MDV Information Officer", "info_officer"),
         ]
         users = []
         for email, full_name, role in users_data:
@@ -568,6 +569,7 @@ async def seed_mdv():
         print("  authorisationofficer@mdvhealth.co.za        — authorisation_officer")
         print("  finance@mdvhealth.co.za     — finance_officer")
         print("  callcentre@mdvhealth.co.za  — call_centre_agent")
+        print("  infoofficer@mdvhealth.co.za — info_officer")
         print("\nData separation: MDV users see ONLY MDV members, claims and authorisations.")
         print("Demo Health users see ONLY Demo Health data.")
 

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Date, Text
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Date, Text, UniqueConstraint
 from sqlalchemy.orm import relationship as sa_relationship
 from datetime import datetime, timezone
 from app.database import Base
@@ -45,6 +45,7 @@ class Member(Base):
     chronic_registrations = sa_relationship("ChronicRegistration", back_populates="member")
     disputes = sa_relationship("Dispute", back_populates="member")
     modified_by_user = sa_relationship("User", foreign_keys=[modified_user])
+    consents = sa_relationship("MemberConsent", back_populates="member")
 
 
 class Dependant(Base):
@@ -97,3 +98,27 @@ class MemberStatusHistory(Base):
 
     member = sa_relationship("Member", back_populates="status_history")
     changed_by_user = sa_relationship("User")
+
+
+class MemberConsent(Base):
+    """POPIA per-purpose consent — append-only. Grant/withdraw each insert a
+    new row (never mutate) so the full consent history is preserved."""
+    __tablename__ = "member_consents"
+    __table_args__ = (
+        UniqueConstraint("member_id", "purpose", "version", name="uq_member_consent_version"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    scheme_id = Column(Integer, nullable=False, index=True)  # logical FK -> schemes (service-layer enforced)
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=False, index=True)
+    purpose = Column(String(50), nullable=False, index=True)  # ConsentPurpose code
+    consented = Column(Boolean, nullable=False)
+    version = Column(Integer, nullable=False)  # 1, 2, 3... per (member_id, purpose)
+    granted_at = Column(DateTime(timezone=True), nullable=True)
+    granted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    withdrew_at = Column(DateTime(timezone=True), nullable=True)
+    withdraw_reason = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    member = sa_relationship("Member", back_populates="consents")
+    granted_by_user = sa_relationship("User")
