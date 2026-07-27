@@ -7,23 +7,23 @@ from app.constants import Role, AuditAction
 @pytest.mark.asyncio
 async def test_get_audit_logs_requires_auth(client: AsyncClient):
     # 'client' is the fixture name from conftest.py
-    response = await client.get("/audit-log")
+    response = await client.get("/api/v1/audit-log")
     assert response.status_code == 401
 
 
 @pytest.mark.asyncio
 async def test_audit_log_mutation_returns_405(client: AsyncClient, auth_headers):
     # Spec says all write endpoints should return 405
-    response = await client.post("/audit-log", headers=auth_headers)
+    response = await client.post("/api/v1/audit-log", headers=auth_headers)
     assert response.status_code == 405
     
-    response = await client.put("/audit-log/1", headers=auth_headers)
+    response = await client.put("/api/v1/audit-log/1", headers=auth_headers)
     assert response.status_code == 405
     
-    response = await client.patch("/audit-log/1", headers=auth_headers)
+    response = await client.patch("/api/v1/audit-log/1", headers=auth_headers)
     assert response.status_code == 405
     
-    response = await client.delete("/audit-log/1", headers=auth_headers)
+    response = await client.delete("/api/v1/audit-log/1", headers=auth_headers)
     assert response.status_code == 405
 
 
@@ -40,7 +40,7 @@ async def test_audit_log_api_isolation(client: AsyncClient, db_session, auth_hea
     await db_session.commit()
     
     # Execute: fetch logs (should be filtered to current user's scheme)
-    response = await client.get("/audit-log", headers=auth_headers)
+    response = await client.get("/api/v1/audit-log", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     
@@ -49,5 +49,5 @@ async def test_audit_log_api_isolation(client: AsyncClient, db_session, auth_hea
         assert item["id"] != log2.id
 
     # Execute: try to fetch scheme 2 log by ID
-    response = await client.get(f"/audit-log/{log2.id}", headers=auth_headers)
+    response = await client.get(f"/api/v1/audit-log/{log2.id}", headers=auth_headers)
     assert response.status_code == 404

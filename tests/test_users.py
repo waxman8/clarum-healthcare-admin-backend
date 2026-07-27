@@ -1,6 +1,6 @@
 import pytest
 from app.models.auth import User, Scheme, AuditLog
-from app.constants import Role, UserStatus
+from app.constants import Role, UserStatus, AuditAction
 from app.integrations.registry import get as get_integration
 from app.integrations.contracts import MessagingGateway
 from app.repositories.user_repository import UserRepository
@@ -40,7 +40,7 @@ async def test_users_api_crud_cycle(client, auth_headers, db_session):
 
     # Verify 'create' AuditLog entry was written
     result = await db_session.execute(
-        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == "create")
+        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == AuditAction.CREATE)
     )
     audit = result.scalar_one_or_none()
     assert audit is not None
@@ -109,12 +109,12 @@ async def test_users_api_crud_cycle(client, auth_headers, db_session):
 
     # Verify 'role_change' and 'name_change' AuditLogs
     result_role = await db_session.execute(
-        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == "role_change")
+        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == AuditAction.ROLE_CHANGE)
     )
     assert result_role.scalar_one_or_none() is not None
 
     result_name = await db_session.execute(
-        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == "name_change")
+        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == AuditAction.NAME_CHANGE)
     )
     assert result_name.scalar_one_or_none() is not None
 
@@ -133,7 +133,7 @@ async def test_users_api_crud_cycle(client, auth_headers, db_session):
 
     # Verify 'reset' AuditLog
     result_reset = await db_session.execute(
-        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == "reset")
+        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == AuditAction.RESET)
     )
     assert result_reset.scalar_one_or_none() is not None
 
@@ -148,7 +148,7 @@ async def test_users_api_crud_cycle(client, auth_headers, db_session):
 
     # Verify 'deactivate' AuditLog
     result_deact = await db_session.execute(
-        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == "deactivate")
+        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == AuditAction.DEACTIVATE)
     )
     assert result_deact.scalar_one_or_none() is not None
 
@@ -217,7 +217,7 @@ async def test_deactivate_user_service_handles_missing_and_already_inactive_user
         select(AuditLog).where(
             AuditLog.entity_type == "user",
             AuditLog.entity_id == target_user.id,
-            AuditLog.action == "deactivate",
+            AuditLog.action == AuditAction.DEACTIVATE,
         )
     )
     assert result.scalars().all()
