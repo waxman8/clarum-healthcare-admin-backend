@@ -12,7 +12,7 @@ class RecoveryCaseCreate(BaseModel):
 
 
 class RecoveryClaimLinkCreate(BaseModel):
-    claim_id: int
+    claim_id: int | str
     allocation_cents: int = Field(gt=0)
 
 
@@ -26,6 +26,7 @@ class RecoveryTransitionCreate(BaseModel):
 class RecoveryClaimLinkRead(BaseModel):
     id: int
     claim_id: int
+    claim_number: Optional[str] = None
     allocation_cents: int
     recovered_cents: int
 

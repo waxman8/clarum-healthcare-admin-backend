@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.claims import Claim
@@ -29,15 +29,31 @@ class RecoveryCaseRepository:
         return result.scalar_one_or_none()
 
     async def get_links(self, case_id: int, scheme_id: int) -> list[RecoveryCaseClaimLink]:
-        result = await self.db.execute(select(RecoveryCaseClaimLink).where(RecoveryCaseClaimLink.recovery_case_id == case_id, RecoveryCaseClaimLink.scheme_id == scheme_id))
-        return list(result.scalars().all())
+        result = await self.db.execute(
+            select(RecoveryCaseClaimLink, Claim.claim_number)
+            .outerjoin(Claim, Claim.id == RecoveryCaseClaimLink.claim_id)
+            .where(RecoveryCaseClaimLink.recovery_case_id == case_id, RecoveryCaseClaimLink.scheme_id == scheme_id)
+        )
+        links = []
+        for link, claim_number in result.all():
+            link.claim_number = claim_number
+            links.append(link)
+        return links
 
     async def get_receipts(self, case_id: int, scheme_id: int) -> list[RecoveryReceipt]:
         result = await self.db.execute(select(RecoveryReceipt).where(RecoveryReceipt.recovery_case_id == case_id, RecoveryReceipt.scheme_id == scheme_id).order_by(RecoveryReceipt.received_on.desc()))
         return list(result.scalars().all())
 
-    async def get_claim(self, claim_id: int, scheme_id: int) -> Optional[Claim]:
-        result = await self.db.execute(select(Claim).where(Claim.id == claim_id, Claim.scheme_id == scheme_id))
+    async def get_claim(self, claim_identifier: int | str, scheme_id: int) -> Optional[Claim]:
+        identifier_str = str(claim_identifier).strip()
+        if identifier_str.isdigit():
+            query = select(Claim).where(
+                or_(Claim.id == int(identifier_str), Claim.claim_number == identifier_str),
+                Claim.scheme_id == scheme_id,
+            )
+        else:
+            query = select(Claim).where(Claim.claim_number == identifier_str, Claim.scheme_id == scheme_id)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def find_link(self, case_id: int, claim_id: int, scheme_id: int) -> Optional[RecoveryCaseClaimLink]:

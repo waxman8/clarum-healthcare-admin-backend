@@ -72,12 +72,13 @@ async def test_link_claim_and_allocation_limits(client, auth_headers, db_session
     assert resp.status_code == 400
     assert "cannot exceed the expected recovery amount" in resp.json()["detail"]
 
-    # 4. Link claim with valid allocation
-    link_valid = {"claim_id": claim.id, "allocation_cents": 40000}
+    # 4. Link claim with valid allocation using friendly claim_number
+    link_valid = {"claim_id": "CLM-REC-001", "allocation_cents": 40000}
     resp = await client.post(f"/api/v1/recovery-cases/{case_id}/claims", json=link_valid, headers=auth_headers)
     assert resp.status_code == 201
     link_data = resp.json()
     assert link_data["claim_id"] == claim.id
+    assert link_data["claim_number"] == "CLM-REC-001"
     assert link_data["allocation_cents"] == 40000
     assert link_data["recovered_cents"] == 0
 

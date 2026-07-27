@@ -33,7 +33,7 @@ class RecoveryCaseService:
         claim = await self.repo.get_claim(payload.claim_id, scheme_id)
         if not claim:
             raise RecoveryCaseError("Claim not found", 404)
-        if await self.repo.find_link(case_id, payload.claim_id, scheme_id):
+        if await self.repo.find_link(case_id, claim.id, scheme_id):
             raise RecoveryCaseError("Claim is already linked to this recovery case")
         links = await self.repo.get_links(case_id, scheme_id)
         if sum(link.allocation_cents for link in links) + payload.allocation_cents > case.expected_cents:
@@ -41,8 +41,16 @@ class RecoveryCaseService:
         available = max(claim.total_approved - claim.recovered_cents, 0)
         if payload.allocation_cents > available:
             raise RecoveryCaseError("Claim allocation exceeds the unrecovered claim amount")
-        link = RecoveryCaseClaimLink(**payload.model_dump(), recovery_case_id=case.id, scheme_id=scheme_id, created_by=user.id, updated_by=user.id)
+        link = RecoveryCaseClaimLink(
+            claim_id=claim.id,
+            allocation_cents=payload.allocation_cents,
+            recovery_case_id=case.id,
+            scheme_id=scheme_id,
+            created_by=user.id,
+            updated_by=user.id,
+        )
         await self.repo.add(link)
+        link.claim_number = claim.claim_number
         self._audit(user, case.id, "link_claim", "Claim linked to recovery case")
         return link
 

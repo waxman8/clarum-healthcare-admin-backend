@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional
 import math
@@ -175,12 +175,16 @@ async def list_claims(
 
 @router.get("/{claim_id}", response_model=ClaimResponse)
 async def get_claim(
-    claim_id: int,
+    claim_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _sid = _effective_scheme_id(current_user)
-    query = load_claim_with_relations(db).where(Claim.id == claim_id)
+    cid_str = claim_id.strip()
+    if cid_str.isdigit():
+        query = load_claim_with_relations(db).where(or_(Claim.id == int(cid_str), Claim.claim_number == cid_str))
+    else:
+        query = load_claim_with_relations(db).where(Claim.claim_number == cid_str)
     if _sid is not None:
         query = query.where(Claim.scheme_id == _sid)
     result = await db.execute(query)
