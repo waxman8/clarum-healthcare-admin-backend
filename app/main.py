@@ -34,22 +34,61 @@ from app.models import recovery as recovery_models  # noqa: F401
 def run_migrations():
     """Run Alembic migrations synchronously."""
     import os
+    import sys
     from alembic.config import Config
     from alembic import command
+    from alembic.script import ScriptDirectory
+    from alembic.runtime.migration import MigrationContext
+    from sqlalchemy import create_engine
     
-    logger.info("Running Alembic migrations...")
+    print("\n" + "="*50)
+    print("STARTUP: DATABASE MIGRATION CHECK")
+    print("="*50)
+    
     try:
-        # Base directory is healthcare-admin-backend/
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        alembic_cfg = Config(os.path.join(base_dir, "alembic.ini"))
+        ini_path = os.path.join(base_dir, "alembic.ini")
+        alembic_cfg = Config(ini_path)
         alembic_cfg.set_main_option("script_location", os.path.join(base_dir, "alembic"))
         
-        # Synchronous call is safer for Vercel's execution model during startup
-        command.upgrade(alembic_cfg, "head")
-        logger.info("Migrations complete.")
+        # Get current and head revisions for logging
+        script = ScriptDirectory.from_config(alembic_cfg)
+        head_revision = script.get_current_head()
+        
+        # We need an engine to check current DB version
+        from app.config import settings
+        db_url = settings.DATABASE_URL
+        if db_url.startswith("sqlite+aiosqlite"):
+            db_url = db_url.replace("sqlite+aiosqlite", "sqlite")
+        
+        engine = create_engine(db_url)
+        with engine.connect() as conn:
+            context = MigrationContext.configure(conn)
+            current_rev = context.get_current_revision()
+            
+        print(f"Current DB Revision: {current_rev}")
+        print(f"Target Head Revision: {head_revision}")
+        
+        if current_rev != head_revision:
+            print(f"UPGRADING DATABASE: {current_rev} -> {head_revision}")
+            command.upgrade(alembic_cfg, "head")
+            print("DATABASE UPGRADE SUCCESSFUL")
+        else:
+            print("DATABASE IS ALREADY AT HEAD REVISION")
+            
     except Exception as e:
-        logger.error(f"Migration failed: {e}")
+        print("\n" + "!"*50)
+        print("DATABASE MIGRATION FAILED!")
+        print(f"Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print("!"*50 + "\n")
+        # In a development/local environment, we might want to continue
+        # even if migrations fail to allow the app to serve requests (and show errors)
+        # but for now we follow the existing pattern of raising to fail startup
         raise e
+    finally:
+        print("="*50 + "\n")
 
 
 @asynccontextmanager
@@ -79,6 +118,10 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    # Log the full traceback to stdout so it appears in server logs
+    logger.error(f"Unhandled Exception: {str(exc)}")
+    logger.error(traceback.format_exc())
+    
     return JSONResponse(
         status_code=500,
         content={
