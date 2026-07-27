@@ -38,9 +38,6 @@ def run_migrations():
     from alembic.config import Config
     from alembic import command
     from alembic.script import ScriptDirectory
-    from alembic.runtime.migration import MigrationContext
-    from sqlalchemy import create_engine
-    
     print("\n" + "="*50)
     print("STARTUP: DATABASE MIGRATION CHECK")
     print("="*50)
@@ -55,26 +52,13 @@ def run_migrations():
         script = ScriptDirectory.from_config(alembic_cfg)
         head_revision = script.get_current_head()
         
-        # We need an engine to check current DB version
-        from app.config import settings
-        db_url = settings.DATABASE_URL
-        if db_url.startswith("sqlite+aiosqlite"):
-            db_url = db_url.replace("sqlite+aiosqlite", "sqlite")
-        
-        engine = create_engine(db_url)
-        with engine.connect() as conn:
-            context = MigrationContext.configure(conn)
-            current_rev = context.get_current_revision()
-            
-        print(f"Current DB Revision: {current_rev}")
+        # Let Alembic handle the upgrade process. It will automatically check
+        # if migrations are needed and handle the async engine correctly
+        # via the logic defined in alembic/env.py
         print(f"Target Head Revision: {head_revision}")
-        
-        if current_rev != head_revision:
-            print(f"UPGRADING DATABASE: {current_rev} -> {head_revision}")
-            command.upgrade(alembic_cfg, "head")
-            print("DATABASE UPGRADE SUCCESSFUL")
-        else:
-            print("DATABASE IS ALREADY AT HEAD REVISION")
+        print("Running migrations (if necessary)...")
+        command.upgrade(alembic_cfg, "head")
+        print("DATABASE MIGRATION PROCESS COMPLETE")
             
     except Exception as e:
         print("\n" + "!"*50)
