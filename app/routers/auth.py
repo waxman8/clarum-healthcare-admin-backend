@@ -1,16 +1,43 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import logging
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from typing import Union
-from datetime import timedelta
+from sqlalchemy import func, select
+from typing import Union, Optional
+from datetime import timedelta, datetime, timezone
+import hashlib
+import hmac
+import secrets
+
+from app.config import settings
 from app.database import get_db
-from app.models.auth import User, Scheme, UserSchemeMembership
-from app.schemas.auth import Token, TokenRefresh, UserResponse, SchemeOption, SchemePickerResponse
-from app.auth.security import verify_password, create_access_token, create_refresh_token, decode_token
+from app.integrations.contracts import MessagingGateway
+from app.integrations.registry import get as get_integration
+from app.models.auth import (
+    User,
+    Scheme,
+    UserSchemeMembership,
+    PasswordResetToken,
+    PasswordResetRequest,
+    AuditLog,
+)
+from app.schemas.auth import (
+    Token,
+    TokenRefresh,
+    UserResponse,
+    SchemeOption,
+    SchemePickerResponse,
+    PasswordResetRequest as PasswordResetRequestPayload,
+    PasswordResetConfirm,
+    PasswordResetValidateRequest,
+    PasswordResetValidateResponse,
+)
+from app.constants import PasswordResetTokenStatus
+from app.auth.security import verify_password, create_access_token, create_refresh_token, decode_token, get_password_hash
 from app.auth.dependencies import get_current_user
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
@@ -64,6 +91,201 @@ async def build_user_response(user: User, db: AsyncSession) -> UserResponse:
     )
 
 
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+async def _get_rate_limit_counts(db: AsyncSession, email: str, ip_address: Optional[str]) -> tuple[int, int]:
+    one_hour_ago = _utc_now() - timedelta(hours=1)
+    email_count_result = await db.execute(
+        select(func.count())
+        .select_from(PasswordResetRequest)
+        .where(func.lower(PasswordResetRequest.email) == email.lower())
+        .where(PasswordResetRequest.created_at >= one_hour_ago)
+    )
+    email_count = email_count_result.scalar_one() or 0
+
+    ip_count_result = await db.execute(
+        select(func.count())
+        .select_from(PasswordResetRequest)
+        .where(PasswordResetRequest.ip_address == ip_address)
+        .where(PasswordResetRequest.created_at >= one_hour_ago)
+    )
+    ip_count = ip_count_result.scalar_one() or 0
+    return email_count, ip_count
+
+
+def _get_client_ip(request: Request) -> Optional[str]:
+    if request.client:
+        return request.client.host
+    return None
+
+
+async def _send_password_reset_email(email: str, full_name: Optional[str], token: str) -> None:
+    gateway = get_integration(MessagingGateway)
+    reset_url = f"{settings.FRONTEND_URL}/password-reset?token={token}"
+    subject = "Password reset request for Clarum Healthcare Portal"
+    body_text = (
+        f"Hello{(' ' + full_name) if full_name else ''},\n\n"
+        "A request was received to reset the password for your Clarum Healthcare Portal account.\n"
+        f"If this was you, click the link below to set a new password:\n\n"
+        f"{reset_url}\n\n"
+        "If you cannot click the link, copy and paste it into your browser.\n\n"
+        "If you did not request this, you can ignore this email.\n\n"
+        "Regards,\n"
+        "Clarum Healthcare Portal Team"
+    )
+    body_html = (
+        f"<p>Hello{(' ' + full_name) if full_name else ''},</p>"
+        "<p>A request was received to reset the password for your Clarum Healthcare Portal account.</p>"
+        "<p>If this was you, click the link below to set a new password:</p>"
+        f"<p><a href=\"{reset_url}\">Reset password</a></p>"
+        "<p>If you cannot click the link, copy and paste it into your browser.</p>"
+        "<p>If you did not request this, you can ignore this email.</p>"
+        "<p>Regards,<br>Clarum Healthcare Portal Team</p>"
+    )
+    gateway.send_email(
+        to=email,
+        subject=subject,
+        body_html=body_html,
+        body_text=body_text,
+    )
+
+
+async def _find_reset_token(db: AsyncSession, token: str) -> Optional[PasswordResetToken]:
+    hashed = _hash_reset_token(token)
+    result = await db.execute(select(PasswordResetToken).where(PasswordResetToken.token_hash == hashed))
+    return result.scalar_one_or_none()
+
+
+async def _validate_reset_token(record: PasswordResetToken) -> None:
+    if record.status != PasswordResetTokenStatus.PENDING:
+        logger.warning(f"Password reset failed: Token status is {record.status}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This password reset link has already been used.")
+    
+    expires_at = record.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if expires_at < _utc_now():
+        logger.warning(f"Password reset failed: Token expired at {expires_at} (now: {_utc_now()})")
+        record.status = PasswordResetTokenStatus.EXPIRED
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This password reset link has expired.")
+
+
+@router.post("/password/reset-request")
+async def request_password_reset(
+    payload: PasswordResetRequestPayload,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    email = payload.email.strip().lower()
+    ip_address = _get_client_ip(request)
+
+    email_count, ip_count = await _get_rate_limit_counts(db, email, ip_address)
+    rate_limited = email_count >= 3 or ip_count >= 10
+
+    reset_request = PasswordResetRequest(email=email, ip_address=ip_address)
+    db.add(reset_request)
+
+    if not rate_limited:
+        user_result = await db.execute(
+            select(User).where(func.lower(User.email) == email)
+        )
+        user = user_result.scalar_one_or_none()
+        if user and user.is_active:
+            token = secrets.token_urlsafe(32)
+            reset_token = PasswordResetToken(
+                user_id=user.id,
+                email=email,
+                token_hash=_hash_reset_token(token),
+                status=PasswordResetTokenStatus.PENDING,
+                expires_at=_utc_now() + timedelta(minutes=30),
+                ip_address=ip_address,
+            )
+            db.add(reset_token)
+            await db.flush()
+            await _send_password_reset_email(user.email, user.full_name, token)
+
+    await db.commit()
+    return {"message": "If that address exists, a reset link is on its way"}
+
+
+@router.post("/password/reset/validate", response_model=PasswordResetValidateResponse)
+async def validate_password_reset(
+    payload: PasswordResetValidateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    token_record = await _find_reset_token(db, payload.token)
+    if not token_record:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This password reset link is invalid.")
+    await _validate_reset_token(token_record)
+    return PasswordResetValidateResponse(valid=True)
+
+
+@router.post("/password/reset", response_model=Token)
+async def reset_password(
+    payload: PasswordResetConfirm,
+    db: AsyncSession = Depends(get_db),
+):
+    token_record = await _find_reset_token(db, payload.token)
+    if not token_record:
+        logger.warning(f"Password reset failed: Token not found for token starting with {payload.token[:8]}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This password reset link is invalid.")
+    await _validate_reset_token(token_record)
+
+    user_result = await db.execute(select(User).where(User.id == token_record.user_id))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        logger.error(f"Password reset failed: User ID {token_record.user_id} not found for valid token")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This password reset link is invalid.")
+    
+    if not user.is_active:
+        logger.warning(f"Password reset failed: User {user.email} is inactive")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This password reset link is invalid.")
+
+    if len(payload.new_password) < 10:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password must be at least 10 characters long.")
+
+    # Mark the reset token used and update the password.
+    token_record.status = PasswordResetTokenStatus.USED
+    token_record.used_at = _utc_now()
+    user.hashed_password = get_password_hash(payload.new_password)
+    user.must_reset_password = False
+
+    audit = AuditLog(
+        user_id=user.id,
+        entity_type="user",
+        entity_id=user.id,
+        action="password_reset",
+        old_value="pending",
+        new_value="reset",
+        ip_address=None,
+    )
+    db.add(audit)
+
+    await db.flush()
+
+    memberships_result = await db.execute(
+        select(UserSchemeMembership).where(UserSchemeMembership.user_id == user.id).where(UserSchemeMembership.is_active == True)
+    )
+    memberships = memberships_result.scalars().all()
+    scheme_id = memberships[0].scheme_id if len(memberships) == 1 else user.scheme_id
+
+    token_data = {"sub": str(user.id)}
+    if scheme_id is not None:
+        token_data["scheme_id"] = scheme_id
+
+    access_token = create_access_token(data=token_data)
+    refresh_token = create_refresh_token(data=token_data)
+    await db.commit()
+    return Token(access_token=access_token, refresh_token=refresh_token)
+
+
 @router.post("/login", response_model=Union[Token, SchemePickerResponse])
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -81,7 +303,6 @@ async def login(
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled")
 
-    # Resolve which schemes this user can access
     memberships_result = await db.execute(
         select(UserSchemeMembership)
         .where(UserSchemeMembership.user_id == user.id)
@@ -90,7 +311,6 @@ async def login(
     memberships = memberships_result.scalars().all()
 
     if len(memberships) > 1:
-        # TPA user with multiple schemes — return picker, no full JWT yet
         scheme_ids = [m.scheme_id for m in memberships]
         schemes_result = await db.execute(
             select(Scheme).where(Scheme.id.in_(scheme_ids)).where(Scheme.is_active == True)
@@ -106,7 +326,6 @@ async def login(
             pre_auth_token=pre_auth_token,
         )
 
-    # Single-scheme or no-membership user — embed scheme_id in JWT
     scheme_id = memberships[0].scheme_id if len(memberships) == 1 else user.scheme_id
     token_data = {"sub": str(user.id)}
     if scheme_id is not None:

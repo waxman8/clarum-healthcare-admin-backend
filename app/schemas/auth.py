@@ -35,6 +35,23 @@ class SchemePickerResponse(BaseModel):
     pre_auth_token: str
 
 
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+
+class PasswordResetValidateRequest(BaseModel):
+    token: str
+
+
+class PasswordResetValidateResponse(BaseModel):
+    valid: bool = True
+
+
 class UserResponse(BaseModel):
     id: int
     email: str
