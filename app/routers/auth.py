@@ -1,9 +1,10 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
-from typing import Union
+from typing import Union, Optional
 from datetime import timedelta, datetime, timezone
 import hashlib
 import hmac
@@ -36,6 +37,7 @@ from app.constants import PasswordResetTokenStatus
 from app.auth.security import verify_password, create_access_token, create_refresh_token, decode_token, get_password_hash
 from app.auth.dependencies import get_current_user
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
@@ -97,7 +99,7 @@ def _hash_reset_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-async def _get_rate_limit_counts(db: AsyncSession, email: str, ip_address: str) -> tuple[int, int]:
+async def _get_rate_limit_counts(db: AsyncSession, email: str, ip_address: Optional[str]) -> tuple[int, int]:
     one_hour_ago = _utc_now() - timedelta(hours=1)
     email_count_result = await db.execute(
         select(func.count())
@@ -117,13 +119,13 @@ async def _get_rate_limit_counts(db: AsyncSession, email: str, ip_address: str) 
     return email_count, ip_count
 
 
-def _get_client_ip(request: Request) -> str | None:
+def _get_client_ip(request: Request) -> Optional[str]:
     if request.client:
         return request.client.host
     return None
 
 
-async def _send_password_reset_email(email: str, full_name: str | None, token: str) -> None:
+async def _send_password_reset_email(email: str, full_name: Optional[str], token: str) -> None:
     gateway = get_integration(MessagingGateway)
     reset_url = f"{settings.FRONTEND_URL}/password-reset?token={token}"
     subject = "Password reset request for Clarum Healthcare Portal"
@@ -154,7 +156,7 @@ async def _send_password_reset_email(email: str, full_name: str | None, token: s
     )
 
 
-async def _find_reset_token(db: AsyncSession, token: str) -> PasswordResetToken | None:
+async def _find_reset_token(db: AsyncSession, token: str) -> Optional[PasswordResetToken]:
     hashed = _hash_reset_token(token)
     result = await db.execute(select(PasswordResetToken).where(PasswordResetToken.token_hash == hashed))
     return result.scalar_one_or_none()
@@ -162,8 +164,15 @@ async def _find_reset_token(db: AsyncSession, token: str) -> PasswordResetToken 
 
 async def _validate_reset_token(record: PasswordResetToken) -> None:
     if record.status != PasswordResetTokenStatus.PENDING:
+        logger.warning(f"Password reset failed: Token status is {record.status}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This password reset link has already been used.")
-    if record.expires_at < _utc_now():
+    
+    expires_at = record.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if expires_at < _utc_now():
+        logger.warning(f"Password reset failed: Token expired at {expires_at} (now: {_utc_now()})")
         record.status = PasswordResetTokenStatus.EXPIRED
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This password reset link has expired.")
 
@@ -225,12 +234,18 @@ async def reset_password(
 ):
     token_record = await _find_reset_token(db, payload.token)
     if not token_record:
+        logger.warning(f"Password reset failed: Token not found for token starting with {payload.token[:8]}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This password reset link is invalid.")
     await _validate_reset_token(token_record)
 
     user_result = await db.execute(select(User).where(User.id == token_record.user_id))
     user = user_result.scalar_one_or_none()
-    if not user or not user.is_active:
+    if not user:
+        logger.error(f"Password reset failed: User ID {token_record.user_id} not found for valid token")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This password reset link is invalid.")
+    
+    if not user.is_active:
+        logger.warning(f"Password reset failed: User {user.email} is inactive")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This password reset link is invalid.")
 
     if len(payload.new_password) < 10:
