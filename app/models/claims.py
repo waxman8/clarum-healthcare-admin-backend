@@ -23,6 +23,7 @@ class Claim(Base):
     total_approved = Column(Integer, nullable=False, default=0)  # cents
     total_member_liability = Column(Integer, nullable=False, default=0)  # cents
     total_scheme_liability = Column(Integer, nullable=False, default=0)  # cents
+    recovered_cents = Column(Integer, nullable=False, default=0)  # cents recovered from third parties
     is_pmb = Column(Boolean, default=False)
     adjudicated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     adjudicated_at = Column(DateTime(timezone=True), nullable=True)
