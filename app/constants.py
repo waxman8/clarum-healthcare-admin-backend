@@ -119,6 +119,12 @@ class AuthStatus:
     EXPIRED = "expired"
 
 
+class PasswordResetTokenStatus:
+    PENDING = "pending"
+    USED = "used"
+    EXPIRED = "expired"
+
+
 # ---------------------------------------------------------------------------
 # Chronic registration statuses  (UPPERCASE — CDL domain convention)
 # ---------------------------------------------------------------------------
