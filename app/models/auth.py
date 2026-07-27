@@ -2,7 +2,8 @@ from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, T
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.database import Base
-from app.models.mixins import MultiTenant
+from app.constants import PasswordResetTokenStatus
+from app.models.mixins import MultiTenant, Auditable
 
 
 class Scheme(Base):
@@ -70,6 +71,29 @@ class UserSchemeMembership(Base):
 
     user = relationship("User", back_populates="scheme_memberships")
     scheme = relationship("Scheme")
+
+
+class PasswordResetToken(Base, Auditable):
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    email = Column(String(255), index=True, nullable=False)
+    token_hash = Column(String(255), unique=True, nullable=False)
+    status = Column(String(50), nullable=False, default=PasswordResetTokenStatus.PENDING)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    ip_address = Column(String(45), nullable=True)
+
+    user = relationship("User")
+
+
+class PasswordResetRequest(Base, Auditable):
+    __tablename__ = "password_reset_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), index=True, nullable=False)
+    ip_address = Column(String(45), nullable=True)
 
 
 class AuditLog(Base, MultiTenant):

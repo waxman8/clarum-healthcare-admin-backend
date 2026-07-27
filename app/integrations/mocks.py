@@ -90,6 +90,12 @@ class MockMessagingGateway(MessagingGateway):
         body_text: str,
     ) -> str:
         self.email_log.append((to, subject, body_html, body_text))
+        print("\n" + "="*80)
+        print(f"MOCK EMAIL SENT TO: {to}")
+        print(f"SUBJECT: {subject}")
+        print("-" * 40)
+        print(body_text)
+        print("="*80 + "\n")
         return f"MOCK-EMAIL-{next(self._seq):06d}"
 
 
