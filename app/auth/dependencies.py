@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models.auth import User
 from app.auth.security import decode_token
 from app.constants import Role
+from app.utils.audit_context import set_current_user as set_audit_user
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
@@ -37,6 +38,9 @@ async def get_current_user(
     # Attach session-scoped scheme_id from JWT (non-mapped attribute — safe from SQLAlchemy autoflush)
     scheme_id_from_token = payload.get("scheme_id")
     user._session_scheme_id = int(scheme_id_from_token) if scheme_id_from_token is not None else None
+
+    # Set the audit context
+    set_audit_user(user)
 
     return user
 

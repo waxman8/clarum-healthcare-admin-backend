@@ -11,7 +11,7 @@ class AuditLogRepository:
 
     async def list(
         self,
-        scheme_id: int,
+        scheme_id: Optional[int],
         actor_id: Optional[int] = None,
         action: Optional[str] = None,
         entity_type: Optional[str] = None,
@@ -21,7 +21,9 @@ class AuditLogRepository:
         page: int = 1,
         page_size: int = 25
     ) -> Tuple[List[AuditLog], int]:
-        filters = [AuditLog.scheme_id == scheme_id]
+        filters = []
+        if scheme_id is not None:
+            filters.append(AuditLog.scheme_id == scheme_id)
 
         if actor_id:
             filters.append(AuditLog.user_id == actor_id)
@@ -61,13 +63,12 @@ class AuditLogRepository:
 
         return items, total
 
-    async def get(self, scheme_id: int, audit_log_id: int) -> Optional[AuditLog]:
-        stmt = select(AuditLog).outerjoin(User).where(
-            and_(
-                AuditLog.id == audit_log_id,
-                AuditLog.scheme_id == scheme_id
-            )
-        )
+    async def get(self, scheme_id: Optional[int], audit_log_id: int) -> Optional[AuditLog]:
+        filters = [AuditLog.id == audit_log_id]
+        if scheme_id is not None:
+            filters.append(AuditLog.scheme_id == scheme_id)
+            
+        stmt = select(AuditLog).outerjoin(User).where(and_(*filters))
         result = await self.db.execute(stmt)
         item = result.scalar_one_or_none()
         

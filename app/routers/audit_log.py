@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from app.auth.dependencies import get_current_user, check_permissions
+from app.auth.dependencies import get_current_user, check_permissions, _effective_scheme_id
 from app.models.auth import User
 from app.schemas.audit_log import AuditLogListResponse, AuditLogResponse
 from app.repositories.audit_log_repository import AuditLogRepository
@@ -48,9 +48,10 @@ async def get_audit_logs(
                 detail="Cannot query further than 90 days back without a smaller range"
             )
     
+    scheme_id = _effective_scheme_id(current_user)
     repo = AuditLogRepository(db)
     items, total = await repo.list(
-        scheme_id=current_user.scheme_id,
+        scheme_id=scheme_id,
         actor_id=actor_id,
         action=action,
         entity_type=entity_type,
@@ -75,8 +76,9 @@ async def get_audit_log_detail(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    scheme_id = _effective_scheme_id(current_user)
     repo = AuditLogRepository(db)
-    item = await repo.get(scheme_id=current_user.scheme_id, audit_log_id=audit_log_id)
+    item = await repo.get(scheme_id=scheme_id, audit_log_id=audit_log_id)
     
     if not item:
         raise HTTPException(

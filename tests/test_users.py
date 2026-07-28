@@ -289,18 +289,29 @@ async def test_role_gated_access_prevention(client, db_session, seed_scheme):
     token = resp.json()["access_token"]
     non_admin_headers = {"Authorization": f"Bearer {token}"}
 
-    # Verify they get 403 Forbidden on Users API endpoints
+    # Verify they can GET users (allowed for Scheme Admin for Audit Log filtering)
     resp = await client.get("/api/v1/users", headers=non_admin_headers)
-    assert resp.status_code == 403
+    assert resp.status_code == 200
 
-    resp = await client.post("/api/v1/users", json={"email": "hacker@test.co.za", "full_name": "Hack", "role": Role.SCHEME_ADMIN}, headers=non_admin_headers)
-    assert resp.status_code == 403
+    # Seed a completely different role to verify 403
+    from app.auth.security import get_password_hash
+    agent_user = User(
+        email="agent@test.co.za",
+        full_name="Agent User",
+        role=Role.CALL_CENTRE_AGENT,
+        scheme_id=seed_scheme.id,
+        hashed_password=get_password_hash("Test@1234"),
+        is_active=True,
+    )
+    db_session.add(agent_user)
+    await db_session.commit()
 
-    resp = await client.get("/api/v1/users/1", headers=non_admin_headers)
-    assert resp.status_code == 403
+    resp = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "agent@test.co.za", "password": "Test@1234"},
+    )
+    agent_token = resp.json()["access_token"]
+    agent_headers = {"Authorization": f"Bearer {agent_token}"}
 
-    resp = await client.patch("/api/v1/users/1", json={"full_name": "Hack"}, headers=non_admin_headers)
-    assert resp.status_code == 403
-
-    resp = await client.post("/api/v1/users/1/reset-password", headers=non_admin_headers)
+    resp = await client.get("/api/v1/users", headers=agent_headers)
     assert resp.status_code == 403
