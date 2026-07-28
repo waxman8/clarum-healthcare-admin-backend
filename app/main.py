@@ -17,6 +17,7 @@ from app.routers import compliance_officer, information_officer_popia
 from app.routers import employer_group, brokerage_fsp, broker_representative
 from app.routers import broker_commission_scale, broker_appointment_allocation
 from app.routers import member_employer_history
+from app.routers import recovery_cases
 # Import all models so SQLAlchemy Base.metadata and Alembic see every table
 from app.models import auth as auth_models  # noqa: F401
 from app.models import members as member_models  # noqa: F401
@@ -28,26 +29,50 @@ from app.models import underwriting as underwriting_models  # noqa: F401
 from app.models import scheme_governance as scheme_governance_models  # noqa: F401
 from app.models import employers as employer_models  # noqa: F401
 from app.models import intermediaries as intermediary_models  # noqa: F401
+from app.models import recovery as recovery_models  # noqa: F401
 
 def run_migrations():
     """Run Alembic migrations synchronously."""
     import os
+    import sys
     from alembic.config import Config
     from alembic import command
+    from alembic.script import ScriptDirectory
+    print("\n" + "="*50)
+    print("STARTUP: DATABASE MIGRATION CHECK")
+    print("="*50)
     
-    logger.info("Running Alembic migrations...")
     try:
-        # Base directory is healthcare-admin-backend/
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        alembic_cfg = Config(os.path.join(base_dir, "alembic.ini"))
+        ini_path = os.path.join(base_dir, "alembic.ini")
+        alembic_cfg = Config(ini_path)
         alembic_cfg.set_main_option("script_location", os.path.join(base_dir, "alembic"))
         
-        # Synchronous call is safer for Vercel's execution model during startup
+        # Get current and head revisions for logging
+        script = ScriptDirectory.from_config(alembic_cfg)
+        head_revision = script.get_current_head()
+        
+        # Let Alembic handle the upgrade process. It will automatically check
+        # if migrations are needed and handle the async engine correctly
+        # via the logic defined in alembic/env.py
+        print(f"Target Head Revision: {head_revision}")
+        print("Running migrations (if necessary)...")
         command.upgrade(alembic_cfg, "head")
-        logger.info("Migrations complete.")
+        print("DATABASE MIGRATION PROCESS COMPLETE")
+            
     except Exception as e:
-        logger.error(f"Migration failed: {e}")
+        print("\n" + "!"*50)
+        print("DATABASE MIGRATION FAILED!")
+        print(f"Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print("!"*50 + "\n")
+        # In a development/local environment, we might want to continue
+        # even if migrations fail to allow the app to serve requests (and show errors)
+        # but for now we follow the existing pattern of raising to fail startup
         raise e
+    finally:
+        print("="*50 + "\n")
 
 
 @asynccontextmanager
@@ -77,6 +102,10 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    # Log the full traceback to stdout so it appears in server logs
+    logger.error(f"Unhandled Exception: {str(exc)}")
+    logger.error(traceback.format_exc())
+    
     return JSONResponse(
         status_code=500,
         content={
@@ -119,6 +148,7 @@ app.include_router(broker_commission_scale.router)
 app.include_router(broker_appointment_allocation.router)
 # Member-Employer link table
 app.include_router(member_employer_history.router)
+app.include_router(recovery_cases.router)
 app.include_router(audit_log.router)
 
 

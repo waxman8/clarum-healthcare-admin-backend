@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional
 import math
@@ -20,6 +20,9 @@ from app.auth.dependencies import get_current_user, _effective_scheme_id
 from app.services.rules_engine import run_rules_engine, run_full_adjudication
 from app.constants import Role, ClaimStatus, AuditAction
 from app.repositories import ClaimRepository
+
+import logging
+logger = logging.getLogger("app.claims")
 
 router = APIRouter(prefix="/api/v1/claims", tags=["claims"])
 
@@ -131,6 +134,8 @@ async def list_claims(
     query = load_claim_with_relations(db)
 
     _sid = _effective_scheme_id(current_user)
+    logger.debug(f"list_claims: user={current_user.email}, effective_sid={_sid}, status={status}")
+    
     if _sid is not None:
         query = query.where(Claim.scheme_id == _sid)
     if status:
@@ -163,6 +168,7 @@ async def list_claims(
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     claims = result.scalars().all()
+    logger.debug(f"list_claims: found {len(claims)} claims for page {page}")
 
     return PaginatedClaimsResponse(
         items=claims,
@@ -175,18 +181,26 @@ async def list_claims(
 
 @router.get("/{claim_id}", response_model=ClaimResponse)
 async def get_claim(
-    claim_id: int,
+    claim_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _sid = _effective_scheme_id(current_user)
-    query = load_claim_with_relations(db).where(Claim.id == claim_id)
+    logger.debug(f"get_claim: id_or_num={claim_id}, effective_sid={_sid}")
+    cid_str = claim_id.strip()
+    if cid_str.isdigit():
+        query = load_claim_with_relations(db).where(or_(Claim.id == int(cid_str), Claim.claim_number == cid_str))
+    else:
+        query = load_claim_with_relations(db).where(Claim.claim_number == cid_str)
     if _sid is not None:
         query = query.where(Claim.scheme_id == _sid)
     result = await db.execute(query)
     claim = result.scalar_one_or_none()
     if not claim:
+        logger.warning(f"get_claim: claim not found or filtered out for id_or_num={claim_id}")
         raise HTTPException(status_code=404, detail="Claim not found")
+    
+    logger.debug(f"get_claim: found claim id={claim.id}, number={claim.claim_number}")
     return claim
 
 
@@ -328,14 +342,20 @@ async def get_adjudication_log(
     Return the full 7-stage adjudication log for a claim, grouped by stage.
     Written by run_full_adjudication(); empty if adjudicate has not been run yet.
     """
+    logger.debug(f"get_adjudication_log: claim_id={claim_id}")
     claim_result = await db.execute(
         select(Claim).where(Claim.id == claim_id)
     )
     claim = claim_result.scalar_one_or_none()
     if not claim:
+        logger.warning(f"get_adjudication_log: claim ID {claim_id} not found in DB")
         raise HTTPException(status_code=404, detail="Claim not found")
+    
     _sid = _effective_scheme_id(current_user)
+    logger.debug(f"get_adjudication_log: found claim ID={claim.id}, claim_number={claim.claim_number}, scheme_id={claim.scheme_id}, user_sid={_sid}")
+    
     if _sid is not None and claim.scheme_id != _sid:
+        logger.warning(f"get_adjudication_log: scheme mismatch. claim.scheme_id={claim.scheme_id}, user_sid={_sid}")
         raise HTTPException(status_code=404, detail="Claim not found")
 
     result = await db.execute(
