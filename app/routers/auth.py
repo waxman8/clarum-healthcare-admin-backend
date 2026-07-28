@@ -406,6 +406,29 @@ async def refresh_token(
     return Token(access_token=access_token, refresh_token=new_refresh)
 
 
+@router.post("/logout")
+async def logout(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Log the logout event. The client is still responsible for clearing the token."""
+    scheme_id = _effective_scheme_id(current_user)
+    
+    db.add(AuditLog(
+        user_id=current_user.id,
+        scheme_id=scheme_id,
+        entity_type="user",
+        entity_id=current_user.id,
+        action=AuditAction.LOGOUT,
+        ip_address=_get_client_ip(request),
+        user_role=current_user.role
+    ))
+    
+    await db.commit()
+    return {"message": "Logged out successfully"}
+
+
 @router.get("/me", response_model=UserResponse)
 async def get_me(
     current_user: User = Depends(get_current_user),

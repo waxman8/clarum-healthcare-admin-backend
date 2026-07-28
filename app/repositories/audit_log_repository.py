@@ -79,3 +79,12 @@ class AuditLogRepository:
             item.actor_name = "System"
             
         return item
+
+    async def get_entity_types(self, scheme_id: Optional[int]) -> List[str]:
+        filters = []
+        if scheme_id is not None:
+            filters.append(AuditLog.scheme_id == scheme_id)
+            
+        stmt = select(AuditLog.entity_type).where(and_(*filters)).distinct().order_by(AuditLog.entity_type)
+        result = await self.db.execute(stmt)
+        return result.scalars().all()

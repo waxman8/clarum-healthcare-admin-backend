@@ -6,7 +6,7 @@ from app.models.auth import User
 from app.schemas.audit_log import AuditLogListResponse, AuditLogResponse
 from app.repositories.audit_log_repository import AuditLogRepository
 from app.constants import Role
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timedelta, timezone
 
 
@@ -68,6 +68,16 @@ async def get_audit_logs(
         page=page,
         page_size=page_size
     )
+
+
+@router.get("/entity-types", response_model=List[str])
+async def get_audit_log_entity_types(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    scheme_id = _effective_scheme_id(current_user)
+    repo = AuditLogRepository(db)
+    return await repo.get_entity_types(scheme_id=scheme_id)
 
 
 @router.get("/{audit_log_id}", response_model=AuditLogResponse)

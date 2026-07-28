@@ -12,7 +12,7 @@ logger = logging.getLogger("app.startup")
 from app.routers import auth, members, providers, authorisations, claims, dashboard, schemes, users, audit_log
 from app.utils.audit_listener import setup_audit_listeners
 
-setup_audit_listeners()
+# setup_audit_listeners()
 from app.routers import billing, chronic, disputes, reports, reference, plan_config, underwriting
 from app.routers import trustee, principal_officer, administrator_accredited
 from app.routers import managed_care_organisation_mco, external_auditor, statutory_actuary
