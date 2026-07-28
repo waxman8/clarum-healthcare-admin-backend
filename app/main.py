@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 import logging
 
@@ -8,7 +9,7 @@ import traceback
 
 logger = logging.getLogger("app.startup")
 
-from app.routers import auth, members, providers, authorisations, claims, dashboard, schemes
+from app.routers import auth, members, providers, authorisations, claims, dashboard, schemes, users
 from app.routers import billing, chronic, disputes, reports, reference, plan_config, underwriting
 from app.routers import trustee, principal_officer, administrator_accredited
 from app.routers import managed_care_organisation_mco, external_auditor, statutory_actuary
@@ -16,6 +17,7 @@ from app.routers import compliance_officer, information_officer_popia
 from app.routers import employer_group, brokerage_fsp, broker_representative
 from app.routers import broker_commission_scale, broker_appointment_allocation
 from app.routers import member_employer_history
+from app.routers import recovery_cases
 # Import all models so SQLAlchemy Base.metadata and Alembic see every table
 from app.models import auth as auth_models  # noqa: F401
 from app.models import members as member_models  # noqa: F401
@@ -27,43 +29,58 @@ from app.models import underwriting as underwriting_models  # noqa: F401
 from app.models import scheme_governance as scheme_governance_models  # noqa: F401
 from app.models import employers as employer_models  # noqa: F401
 from app.models import intermediaries as intermediary_models  # noqa: F401
+from app.models import recovery as recovery_models  # noqa: F401
 
-def _run_migrations() -> None:
-    """Run Alembic migrations in a separate thread with its own event loop.
-    This avoids the 'cannot nest asyncio.run()' problem inside uvicorn's loop."""
-    import concurrent.futures
+def run_migrations():
+    """Run Alembic migrations synchronously."""
     import os
+    import sys
     from alembic.config import Config
     from alembic import command
-
-    def _migrate():
-        alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
-        alembic_cfg.set_main_option(
-            "script_location",
-            os.path.join(os.path.dirname(__file__), "..", "alembic"),
-        )
+    from alembic.script import ScriptDirectory
+    print("\n" + "="*50)
+    print("STARTUP: DATABASE MIGRATION CHECK")
+    print("="*50)
+    
+    try:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        ini_path = os.path.join(base_dir, "alembic.ini")
+        alembic_cfg = Config(ini_path)
+        alembic_cfg.set_main_option("script_location", os.path.join(base_dir, "alembic"))
+        
+        # Get current and head revisions for logging
+        script = ScriptDirectory.from_config(alembic_cfg)
+        head_revision = script.get_current_head()
+        
+        # Let Alembic handle the upgrade process. It will automatically check
+        # if migrations are needed and handle the async engine correctly
+        # via the logic defined in alembic/env.py
+        print(f"Target Head Revision: {head_revision}")
+        print("Running migrations (if necessary)...")
         command.upgrade(alembic_cfg, "head")
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(_migrate)
-        try:
-            # Wait for migrations with a timeout to prevent indefinite hang
-            future.result(timeout=60)
-        except concurrent.futures.TimeoutError:
-            logger.error("Migrations timed out after 60 seconds.")
-            # We don't raise here so the app can at least try to start,
-            # though it might fail later if tables are missing.
+        print("DATABASE MIGRATION PROCESS COMPLETE")
+            
+    except Exception as e:
+        print("\n" + "!"*50)
+        print("DATABASE MIGRATION FAILED!")
+        print(f"Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print("!"*50 + "\n")
+        # In a development/local environment, we might want to continue
+        # even if migrations fail to allow the app to serve requests (and show errors)
+        # but for now we follow the existing pattern of raising to fail startup
+        raise e
+    finally:
+        print("="*50 + "\n")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Running Alembic migrations...")
-    try:
-        #_run_migrations()
-        logger.info("Migrations complete.")
-    except Exception as e:
-        logger.error(f"Migration failed: {e}")
-        raise
+    # Run migrations in a separate thread to avoid blocking the main event loop
+    # and to allow asyncio.run() to work inside alembic/env.py
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, run_migrations)
     yield
 
 
@@ -85,6 +102,10 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    # Log the full traceback to stdout so it appears in server logs
+    logger.error(f"Unhandled Exception: {str(exc)}")
+    logger.error(traceback.format_exc())
+    
     return JSONResponse(
         status_code=500,
         content={
@@ -102,6 +123,7 @@ app.include_router(authorisations.router)
 app.include_router(claims.router)
 app.include_router(dashboard.router)
 app.include_router(schemes.router)
+app.include_router(users.router)
 app.include_router(billing.router)
 app.include_router(chronic.router)
 app.include_router(disputes.router)
@@ -126,6 +148,7 @@ app.include_router(broker_commission_scale.router)
 app.include_router(broker_appointment_allocation.router)
 # Member-Employer link table
 app.include_router(member_employer_history.router)
+app.include_router(recovery_cases.router)
 
 
 @app.get("/health")

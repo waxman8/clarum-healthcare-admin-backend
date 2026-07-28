@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Date
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Date, func
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.database import Base
@@ -23,11 +23,12 @@ class Claim(Base):
     total_approved = Column(Integer, nullable=False, default=0)  # cents
     total_member_liability = Column(Integer, nullable=False, default=0)  # cents
     total_scheme_liability = Column(Integer, nullable=False, default=0)  # cents
+    recovered_cents = Column(Integer, nullable=False, default=0)  # cents recovered from third parties
     is_pmb = Column(Boolean, default=False)
     adjudicated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     adjudicated_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     scheme = relationship("Scheme", back_populates="claims")
     member = relationship("Member", back_populates="claims")

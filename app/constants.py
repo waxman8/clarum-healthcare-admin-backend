@@ -34,6 +34,16 @@ class Role:
     CAN_RESOLVE_DISPUTE = [SUPER_ADMIN, SCHEME_ADMIN]
     CAN_CHANGE_THEME = [SUPER_ADMIN, SCHEME_ADMIN]
     CAN_OVERRIDE_CLAIM = [SUPER_ADMIN, SCHEME_ADMIN]
+    CAN_MANAGE_USERS = [SUPER_ADMIN]
+    CAN_MANAGE_RECOVERY_CASES = [SUPER_ADMIN, SCHEME_ADMIN, CLAIMS_PROCESSOR, FINANCE_OFFICER]
+
+
+# ---------------------------------------------------------------------------
+# User statuses
+# ---------------------------------------------------------------------------
+class UserStatus:
+    ACTIVE = "active"
+    DEACTIVATED = "deactivated"
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +60,25 @@ class MemberStatus:
 
 
 # ---------------------------------------------------------------------------
+# Member communication preferences
+# ---------------------------------------------------------------------------
+class CommunicationChannel:
+    SMS = "SMS"
+    EMAIL = "EMAIL"
+    POST = "POST"
+
+    ALL = [SMS, EMAIL, POST]
+
+
+class CommunicationCategory:
+    BILLING = "BILLING"
+    WELLNESS = "WELLNESS"
+    GENERAL = "GENERAL"
+
+    ALL = [BILLING, WELLNESS, GENERAL]
+
+
+# ---------------------------------------------------------------------------
 # Claim statuses
 # ---------------------------------------------------------------------------
 class ClaimStatus:
@@ -61,6 +90,25 @@ class ClaimStatus:
     PAID = "paid"
 
 
+class RecoveryType:
+    COB = "COB"
+    RAF = "RAF"
+    COIDA = "COIDA"
+
+    ALL = [COB, RAF, COIDA]
+
+
+class RecoveryStatus:
+    IDENTIFIED = "IDENTIFIED"
+    SUBMITTED = "SUBMITTED"
+    PARTIALLY_RECEIVED = "PARTIALLY_RECEIVED"
+    RECEIVED = "RECEIVED"
+    DECLINED = "DECLINED"
+    WRITTEN_OFF = "WRITTEN_OFF"
+
+    TERMINAL = [RECEIVED, DECLINED, WRITTEN_OFF]
+
+
 # ---------------------------------------------------------------------------
 # Authorisation statuses
 # ---------------------------------------------------------------------------
@@ -68,6 +116,12 @@ class AuthStatus:
     PENDING = "pending"
     APPROVED = "approved"
     DECLINED = "declined"
+    EXPIRED = "expired"
+
+
+class PasswordResetTokenStatus:
+    PENDING = "pending"
+    USED = "used"
     EXPIRED = "expired"
 
 
