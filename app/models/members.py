@@ -44,6 +44,12 @@ class Member(Base):
     chronic_registrations = sa_relationship("ChronicRegistration", back_populates="member")
     disputes = sa_relationship("Dispute", back_populates="member")
     communication_preferences = sa_relationship("MemberCommunicationPreference", back_populates="member")
+    nominees = sa_relationship(
+        "MemberNominee",
+        primaryjoin="MemberNominee.member_id == Member.id",
+        foreign_keys="[MemberNominee.member_id]",
+        back_populates="member"
+    )
 
 
 class Dependant(Base):
@@ -109,3 +115,21 @@ class MemberCommunicationPreference(Base, MultiTenant, Auditable):
     is_opted_in = Column(Boolean, nullable=False, default=True)
 
     member = sa_relationship("Member", back_populates="communication_preferences")
+
+
+class MemberNominee(Base, MultiTenant, Auditable):
+    __tablename__ = "member_nominees"
+
+    id = Column(Integer, primary_key=True, index=True)
+    member_id = Column(Integer, nullable=False)  # logical FK -> members (service-layer enforced)
+    full_name = Column(String(200), nullable=False)
+    id_number = Column(String(13), nullable=False)
+    relationship = Column(String(50), nullable=False)  # allowed: Relationship constants
+    allocation_pct = Column(Integer, nullable=False)
+
+    member = sa_relationship(
+        "Member",
+        primaryjoin="MemberNominee.member_id == Member.id",
+        foreign_keys="[MemberNominee.member_id]",
+        back_populates="nominees"
+    )

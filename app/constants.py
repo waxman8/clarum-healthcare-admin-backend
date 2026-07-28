@@ -36,6 +36,20 @@ class Role:
     CAN_OVERRIDE_CLAIM = [SUPER_ADMIN, SCHEME_ADMIN]
     CAN_MANAGE_USERS = [SUPER_ADMIN]
     CAN_MANAGE_RECOVERY_CASES = [SUPER_ADMIN, SCHEME_ADMIN, CLAIMS_PROCESSOR, FINANCE_OFFICER]
+    CAN_MANAGE_NOMINEES = [SUPER_ADMIN, SCHEME_ADMIN, CALL_CENTRE_AGENT]
+
+
+# ---------------------------------------------------------------------------
+# Relationship types
+# ---------------------------------------------------------------------------
+class Relationship:
+    SPOUSE = "SPOUSE"
+    CHILD = "CHILD"
+    PARENT = "PARENT"
+    SIBLING = "SIBLING"
+    OTHER = "OTHER"
+
+    ALL = [SPOUSE, CHILD, PARENT, SIBLING, OTHER]
 
 
 # ---------------------------------------------------------------------------
