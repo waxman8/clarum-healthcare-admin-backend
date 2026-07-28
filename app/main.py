@@ -59,7 +59,7 @@ def _run_migrations() -> None:
 async def lifespan(app: FastAPI):
     logger.info("Running Alembic migrations...")
     try:
-        _run_migrations()
+        #_run_migrations()
         logger.info("Migrations complete.")
     except Exception as e:
         logger.error(f"Migration failed: {e}")

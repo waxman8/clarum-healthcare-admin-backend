@@ -25,6 +25,7 @@ from app.schemas.plan_config import (
 )
 from app.auth.dependencies import get_current_user, _scheme_id_for
 from app.constants import Role
+from pydantic import BaseModel, computed_field
 
 router = APIRouter(prefix="/api/v1/plan-config", tags=["plan-config"])
 
@@ -54,6 +55,24 @@ async def list_plan_options(
     result = await db.execute(query.order_by(PlanOption.name))
     return result.scalars().all()
 
+class CopaymentRuleResponse(BaseModel):
+    id: int
+    scheme_id: int
+    plan_option_id: Optional[int]
+    trigger: str
+    copayment_type: str
+    copayment_value: int
+    description: Optional[str]
+    is_upfront: bool
+    is_active: bool
+    
+    @computed_field
+    def trigger_type(self) -> str:
+        return "Tariff Code" 
+
+    @computed_field
+    def trigger_value(self) -> str:
+        return self.trigger
 
 @router.get("/plans/{plan_id}", response_model=PlanOptionResponse)
 async def get_plan_option(
@@ -302,9 +321,10 @@ async def create_copayment_rule(
     db.add(obj)
     try:
         await db.commit()
-    except Exception:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Duplicate trigger for this scheme/plan")
+    except Exception as e:
+        await db.rollback()        
+        #raise HTTPException(status_code=400, detail=f"Real Error: {str(e)}")
+        raise HTTPException(status_code=400, detail="Duplicate trigger for this scheme/plan")   
     await db.refresh(obj)
     return obj
 
