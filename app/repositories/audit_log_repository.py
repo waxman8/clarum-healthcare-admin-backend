@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, select, func, and_
+from sqlalchemy.orm import selectinload
 from app.models.auth import AuditLog, User
 from typing import Optional, List, Tuple
 from datetime import datetime
@@ -43,9 +44,9 @@ class AuditLogRepository:
         result = await self.db.execute(count_stmt)
         total = result.scalar() or 0
         
-        # Fetch items
+        # Fetch items with eager loaded user
         stmt = select(AuditLog)\
-            .outerjoin(User)\
+            .options(selectinload(AuditLog.user))\
             .where(and_(*filters))\
             .order_by(desc(AuditLog.timestamp))\
             .offset((page - 1) * page_size)\
@@ -68,7 +69,7 @@ class AuditLogRepository:
         if scheme_id is not None:
             filters.append(AuditLog.scheme_id == scheme_id)
             
-        stmt = select(AuditLog).outerjoin(User).where(and_(*filters))
+        stmt = select(AuditLog).options(selectinload(AuditLog.user)).where(and_(*filters))
         result = await self.db.execute(stmt)
         item = result.scalar_one_or_none()
         
