@@ -7,7 +7,8 @@ from app.schemas.audit_log import AuditLogListResponse, AuditLogResponse
 from app.repositories.audit_log_repository import AuditLogRepository
 from app.constants import Role
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
 
 router = APIRouter(
     prefix="/api/v1/audit-log",
@@ -29,6 +30,24 @@ async def get_audit_logs(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # Enforce 90-day max range
+    now = datetime.now(timezone.utc)
+    check_from = date_from
+    check_to = date_to or now
+    
+    if check_from and check_to:
+        if check_to - check_from > timedelta(days=90):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Date range span cannot exceed 90 days"
+            )
+    elif check_from:
+        if now - check_from > timedelta(days=90):
+             raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot query further than 90 days back without a smaller range"
+            )
+    
     repo = AuditLogRepository(db)
     items, total = await repo.list(
         scheme_id=current_user.scheme_id,

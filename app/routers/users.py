@@ -13,7 +13,7 @@ from app.services.user_service import UserService
 router = APIRouter(
     prefix="/api/v1/users",
     tags=["User Management"],
-    dependencies=[Depends(require_roles(Role.SUPER_ADMIN))],
+    dependencies=[Depends(require_roles(Role.SUPER_ADMIN, Role.SCHEME_ADMIN))],
 )
 
 
