@@ -181,3 +181,115 @@ async def auth_headers(client, seed_admin_user):
     assert resp.status_code == 200, resp.text
     token = resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture(scope="function")
+async def seed_scheme_admin_user(db_session, seed_scheme):
+    from app.models.auth import User
+    user = User(
+        email="schemeadmin@test.co.za",
+        full_name="Scheme Admin",
+        hashed_password=get_password_hash("Test@1234"),
+        role=Role.SCHEME_ADMIN,
+        scheme_id=seed_scheme.id,
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture(scope="function")
+async def scheme_admin_headers(client, seed_scheme_admin_user):
+    resp = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "schemeadmin@test.co.za", "password": "Test@1234"},
+    )
+    assert resp.status_code == 200, resp.text
+    token = resp.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture(scope="function")
+async def seed_call_centre_user(db_session, seed_scheme):
+    from app.models.auth import User
+    user = User(
+        email="callcentre@test.co.za",
+        full_name="Call Centre",
+        hashed_password=get_password_hash("Test@1234"),
+        role=Role.CALL_CENTRE_AGENT,
+        scheme_id=seed_scheme.id,
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture(scope="function")
+async def call_centre_headers(client, seed_call_centre_user):
+    resp = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "callcentre@test.co.za", "password": "Test@1234"},
+    )
+    assert resp.status_code == 200, resp.text
+    token = resp.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture(scope="function")
+async def seed_other_scheme(db_session):
+    from app.models.auth import Scheme
+    scheme = Scheme(
+        name="Other Scheme",
+        code="OTHR",
+        registration_number="OTHR-REG-001",
+        is_active=True,
+    )
+    db_session.add(scheme)
+    await db_session.commit()
+    await db_session.refresh(scheme)
+    return scheme
+
+
+@pytest_asyncio.fixture(scope="function")
+async def seed_other_plan(db_session, seed_other_scheme):
+    from app.models.reference import PlanOption
+    plan = PlanOption(
+        scheme_id=seed_other_scheme.id,
+        name="Other Plan",
+        code="OTHR-BASIC",
+        monthly_premium=40000,
+        is_active=True,
+        hospital_network="OPEN",
+        day_to_day_type="LIMIT",
+        tariff_multiplier=100,
+        benefit_year=2026,
+    )
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+    return plan
+
+
+@pytest_asyncio.fixture(scope="function")
+async def seed_other_member(db_session, seed_other_scheme, seed_other_plan):
+    from app.models.members import Member
+    member = Member(
+        scheme_id=seed_other_scheme.id,
+        membership_number="OTHR-2026-000001",
+        id_number="8101015009082",
+        first_name="Other",
+        surname="Member",
+        date_of_birth=date(1981, 1, 1),
+        gender="F",
+        plan_option_id=seed_other_plan.id,
+        status=MemberStatus.ACTIVE,
+        join_date=date(2026, 1, 1),
+    )
+    db_session.add(member)
+    await db_session.commit()
+    await db_session.refresh(member)
+    return member

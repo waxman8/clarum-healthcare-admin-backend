@@ -11,13 +11,20 @@ from app.database import get_db
 from app.models.members import Member, Dependant, BenefitLimit, MemberStatusHistory
 from app.models.billing import BenefitBalance
 from app.models.auth import User, Scheme
+from app.repositories.member_communication_preference_repository import (
+    MemberCommunicationPreferenceRepository,
+)
 from app.schemas.members import (
     MemberCreate, MemberUpdate, MemberStatusUpdate, MemberResponse,
     DependantCreate, DependantUpdate, DependantResponse, BenefitLimitResponse,
-    MemberStatusHistoryResponse, MemberSearchRequest, PaginatedMembersResponse
+    MemberStatusHistoryResponse, MemberSearchRequest, PaginatedMembersResponse,
+    MemberCommunicationPreferenceMatrixResponse, MemberCommunicationPreferenceUpdateRequest,
 )
 from app.auth.dependencies import get_current_user, _effective_scheme_id
 from app.models.billing import MemberContribution
+from app.services.member_communication_preference_service import (
+    MemberCommunicationPreferenceService,
+)
 
 router = APIRouter(prefix="/api/v1/members", tags=["members"])
 
@@ -77,6 +84,10 @@ async def create_member(
     db.add(member)
     await db.flush()
 
+    pref_repo = MemberCommunicationPreferenceRepository(db)
+    pref_service = MemberCommunicationPreferenceService(db, pref_repo)
+    await pref_service.ensure_defaults(member, current_user.id)
+
     history = MemberStatusHistory(
         member_id=member.id,
         old_status=None,
@@ -91,6 +102,11 @@ async def create_member(
         select(Member).where(Member.id == member.id).options(selectinload(Member.plan_option))
     )
     return result.scalar_one()
+
+
+def _communication_pref_service(db: AsyncSession) -> MemberCommunicationPreferenceService:
+    repo = MemberCommunicationPreferenceRepository(db)
+    return MemberCommunicationPreferenceService(db, repo)
 
 
 @router.get("", response_model=PaginatedMembersResponse)
@@ -353,6 +369,37 @@ async def get_member_history(
         .order_by(MemberStatusHistory.changed_at.desc())
     )
     return result.scalars().all()
+
+
+@router.get(
+    "/{member_id}/communication-preferences",
+    response_model=MemberCommunicationPreferenceMatrixResponse,
+)
+async def get_member_communication_preferences(
+    member_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    member = await get_member_scoped(member_id, db, current_user)
+    service = _communication_pref_service(db)
+    prefs = await service.ensure_defaults(member, current_user.id)
+    return MemberCommunicationPreferenceMatrixResponse(member_id=member.id, preferences=prefs)
+
+
+@router.put(
+    "/{member_id}/communication-preferences",
+    response_model=MemberCommunicationPreferenceMatrixResponse,
+)
+async def update_member_communication_preferences(
+    member_id: int,
+    payload: MemberCommunicationPreferenceUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    member = await get_member_scoped(member_id, db, current_user)
+    service = _communication_pref_service(db)
+    prefs = await service.update_preferences(member, payload.preferences, current_user)
+    return MemberCommunicationPreferenceMatrixResponse(member_id=member.id, preferences=prefs)
 
 
 @router.get("/{member_id}/contributions")
