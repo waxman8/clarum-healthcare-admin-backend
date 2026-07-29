@@ -93,6 +93,7 @@ class MemberCommunicationPreferenceService:
             self.db.add(
                 AuditLog(
                     user_id=current_user.id,
+                    scheme_id=member.scheme_id,
                     user_role=current_user.role,
                     entity_type="member_communication_preference",
                     entity_id=pref.id,

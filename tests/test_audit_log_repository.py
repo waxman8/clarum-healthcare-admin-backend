@@ -103,3 +103,52 @@ async def test_get_audit_log_prevents_cross_scheme_access(db_session):
     # Execute & Assert
     assert await repo.get(scheme_id=scheme1.id, audit_log_id=log1.id) is not None
     assert await repo.get(scheme_id=scheme2.id, audit_log_id=log1.id) is None
+
+
+@pytest.mark.asyncio
+async def test_list_audit_logs_filters_by_actor(db_session):
+    # Setup
+    scheme = Scheme(name="Scheme", code="S", registration_number="REG")
+    db_session.add(scheme)
+    await db_session.commit()
+
+    user1 = User(email="u1@test.co.za", full_name="User 1", role="admin", hashed_password="pw")
+    user2 = User(email="u2@test.co.za", full_name="User 2", role="admin", hashed_password="pw")
+    db_session.add_all([user1, user2])
+    await db_session.commit()
+
+    log1 = AuditLog(scheme_id=scheme.id, entity_type="MEMBER", action=AuditAction.CREATE, user_id=user1.id)
+    log2 = AuditLog(scheme_id=scheme.id, entity_type="MEMBER", action=AuditAction.CREATE, user_id=user2.id)
+    db_session.add_all([log1, log2])
+    await db_session.commit()
+
+    repo = AuditLogRepository(db_session)
+    
+    # Execute
+    items, total = await repo.list(scheme_id=scheme.id, actor_id=user1.id)
+
+    # Assert
+    assert total == 1
+    assert items[0].user_id == user1.id
+
+
+@pytest.mark.asyncio
+async def test_list_audit_logs_filters_by_entity_type(db_session):
+    # Setup
+    scheme = Scheme(name="Scheme", code="S", registration_number="REG")
+    db_session.add(scheme)
+    await db_session.commit()
+
+    log1 = AuditLog(scheme_id=scheme.id, entity_type="MEMBER", action=AuditAction.CREATE)
+    log2 = AuditLog(scheme_id=scheme.id, entity_type="CLAIM", action=AuditAction.CREATE)
+    db_session.add_all([log1, log2])
+    await db_session.commit()
+
+    repo = AuditLogRepository(db_session)
+    
+    # Execute
+    items, total = await repo.list(scheme_id=scheme.id, entity_type="MEMBER")
+
+    # Assert
+    assert total == 1
+    assert items[0].entity_type == "MEMBER"
