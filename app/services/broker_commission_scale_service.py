@@ -48,6 +48,7 @@ class BrokerCommissionScaleService:
         effective_from = getattr(payload, 'effective_from', None)
         effective_to = getattr(payload, 'effective_to', None)
         broker_id = getattr(payload, 'broker_id', None)
+        member_type = getattr(payload, 'member_type', None)
         
         if isinstance(payload, BrokerCommissionScaleUpdate) and current_id:
             existing = await self.repo.get(current_id, scheme_id)
@@ -59,6 +60,9 @@ class BrokerCommissionScaleService:
             
             if broker_id is None and not payload.model_dump(exclude_unset=True).get('broker_id', False): broker_id = existing.broker_id
             elif payload.model_dump(exclude_unset=True).get('broker_id') is None: broker_id = None
+
+            if member_type is None and not payload.model_dump(exclude_unset=True).get('member_type', False): member_type = existing.member_type
+            elif payload.model_dump(exclude_unset=True).get('member_type') is None: member_type = None
             
         if effective_from and effective_to and effective_to < effective_from:
             raise HTTPException(status_code=400, detail="effective_to cannot be before effective_from")
@@ -66,7 +70,8 @@ class BrokerCommissionScaleService:
         if effective_from:
             query = select(BrokerCommissionScale).where(
                 BrokerCommissionScale.scheme_id == scheme_id,
-                BrokerCommissionScale.broker_id == broker_id
+                BrokerCommissionScale.broker_id == broker_id if broker_id is not None else BrokerCommissionScale.broker_id.is_(None),
+                BrokerCommissionScale.member_type == member_type
             )
             if current_id:
                 query = query.where(BrokerCommissionScale.id != current_id)

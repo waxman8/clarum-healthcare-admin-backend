@@ -1,0 +1,1 @@
+"from app.schemas.broker_commission_scale import BrokerCommissionScaleCreate; print(BrokerCommissionScaleCreate(member_type='A', commission_amount_cents=1, vat_inclusive=True, effective_from='2026-01-01', max_pmpm_cents=1))"  
