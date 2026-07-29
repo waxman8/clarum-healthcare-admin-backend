@@ -165,3 +165,54 @@ class MemberCommunicationPreferenceUpdateItem(BaseModel):
 
 class MemberCommunicationPreferenceUpdateRequest(BaseModel):
     preferences: List[MemberCommunicationPreferenceUpdateItem]
+
+
+class ConsentPurposeRead(BaseModel):
+    id: int
+    code: str
+    description: str
+    is_active: bool
+
+    model_config = {"from_attributes": True}
+
+
+class MemberConsentRead(BaseModel):
+    id: int
+    member_id: int
+    purpose: str
+    consented: bool
+    granted_at: datetime
+    granted_by_user_id: Optional[int] = None
+    withdrew_at: Optional[datetime] = None
+    withdraw_reason: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class MemberConsentMatrixItem(BaseModel):
+    purpose: ConsentPurposeRead
+    current: Optional[MemberConsentRead] = None
+
+
+class MemberConsentMatrixResponse(BaseModel):
+    member_id: int
+    consents: List[MemberConsentMatrixItem]
+
+
+class MemberConsentActionRequest(BaseModel):
+    purpose: str
+    consented: bool
+    reason: Optional[str] = None
+
+
+class ConsentAuditLogEntryRead(BaseModel):
+    id: int
+    timestamp: datetime
+    action: str
+    user_id: Optional[int] = None
+    user_role: Optional[str] = None
+    reason: Optional[str] = None
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+
+    model_config = {"from_attributes": True}

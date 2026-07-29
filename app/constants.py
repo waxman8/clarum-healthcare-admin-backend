@@ -17,6 +17,7 @@ class Role:
     FINANCE_OFFICER = "finance_officer"
     FINANCE_ADMIN = "finance_admin"
     CALL_CENTRE_AGENT = "call_centre_agent"
+    INFO_OFFICER = "information_officer"
 
     ALL = [
         SUPER_ADMIN,
@@ -25,6 +26,7 @@ class Role:
         AUTHORISATION_OFFICER,
         FINANCE_OFFICER,
         CALL_CENTRE_AGENT,
+        INFO_OFFICER,
     ]
 
     # Common permission groups
@@ -36,6 +38,7 @@ class Role:
     CAN_OVERRIDE_CLAIM = [SUPER_ADMIN, SCHEME_ADMIN]
     CAN_MANAGE_USERS = [SUPER_ADMIN]
     CAN_MANAGE_RECOVERY_CASES = [SUPER_ADMIN, SCHEME_ADMIN, CLAIMS_PROCESSOR, FINANCE_OFFICER]
+    CAN_RECORD_CONSENT = [SUPER_ADMIN, SCHEME_ADMIN, CALL_CENTRE_AGENT, INFO_OFFICER]
 
 
 # ---------------------------------------------------------------------------

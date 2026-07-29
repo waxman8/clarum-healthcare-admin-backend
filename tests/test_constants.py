@@ -14,7 +14,8 @@ def test_role_all_contains_all_roles():
     assert Role.AUTHORISATION_OFFICER in Role.ALL
     assert Role.FINANCE_OFFICER in Role.ALL
     assert Role.CALL_CENTRE_AGENT in Role.ALL
-    assert len(Role.ALL) == 6
+    assert Role.INFO_OFFICER in Role.ALL
+    assert len(Role.ALL) == 7
 
 
 def test_role_permission_groups_are_subsets():
