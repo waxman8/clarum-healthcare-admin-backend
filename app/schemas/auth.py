@@ -63,8 +63,48 @@ class UserResponse(BaseModel):
     scheme_code: Optional[str] = None
     created_at: datetime
     available_schemes: List[SchemeOption] = []
+    mfa_enabled: bool = False
 
     model_config = {"from_attributes": True}
+
+
+class MfaSetupResponse(BaseModel):
+    otpauth_url: str        # otpauth://totp/...
+    secret: str             # base32 — shown once, never stored client-side
+
+
+class MfaVerifyRequest(BaseModel):
+    secret: str             # base32 secret returned from setup, passed back by client
+    code: str               # 6-digit TOTP
+
+
+class MfaVerifyResponse(BaseModel):
+    enabled: bool
+    recovery_codes: List[str]   # 10 plaintext codes — shown once
+
+
+class MfaDisableRequest(BaseModel):
+    password: str
+    code: str               # fresh TOTP
+
+
+class MfaChallengeRequest(BaseModel):
+    code: str               # 6-digit TOTP OR recovery code
+
+
+class MfaChallengeResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+class MfaRegenerateResponse(BaseModel):
+    recovery_codes: List[str]   # 10 new plaintext codes
+
+
+class MfaRequiredResponse(BaseModel):
+    mfa_required: bool = True
+    pre_auth_mfa_token: str     # short-lived JWT (10 min), no scheme scope
 
 
 class SchemeCreate(BaseModel):

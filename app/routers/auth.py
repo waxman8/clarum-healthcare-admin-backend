@@ -1,14 +1,20 @@
+import json
 import logging
+import os
+import secrets
+from base64 import b64encode, b64decode
+from datetime import timedelta, datetime, timezone
+from typing import Union, Optional
+
+import pyotp
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
-from typing import Union, Optional
-from datetime import timedelta, datetime, timezone
 import hashlib
 import hmac
-import secrets
 
 from app.config import settings
 from app.database import get_db
@@ -32,14 +38,114 @@ from app.schemas.auth import (
     PasswordResetConfirm,
     PasswordResetValidateRequest,
     PasswordResetValidateResponse,
+    MfaSetupResponse,
+    MfaVerifyRequest,
+    MfaVerifyResponse,
+    MfaDisableRequest,
+    MfaChallengeRequest,
+    MfaChallengeResponse,
+    MfaRegenerateResponse,
+    MfaRequiredResponse,
 )
-from app.constants import PasswordResetTokenStatus
+from app.constants import PasswordResetTokenStatus, MfaAuditAction
 from app.auth.security import verify_password, create_access_token, create_refresh_token, decode_token, get_password_hash
 from app.auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
+_pre_mfa_bearer = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
+# ---------------------------------------------------------------------------
+# AES-256-GCM helpers for TOTP secret encryption
+# ---------------------------------------------------------------------------
+
+def _get_aes_key() -> bytes:
+    """Return the 32-byte AES key from settings (hex-encoded)."""
+    key_hex = settings.MFA_ENCRYPTION_KEY
+    key_bytes = bytes.fromhex(key_hex)
+    if len(key_bytes) != 32:
+        raise ValueError("MFA_ENCRYPTION_KEY must be a 64-character hex string (32 bytes)")
+    return key_bytes
+
+
+def _encrypt_totp_secret(plaintext: str) -> str:
+    """Encrypt a TOTP base32 secret with AES-256-GCM. Returns base64(nonce + ciphertext + tag)."""
+    key = _get_aes_key()
+    aesgcm = AESGCM(key)
+    nonce = os.urandom(12)  # 96-bit nonce
+    ciphertext = aesgcm.encrypt(nonce, plaintext.encode("utf-8"), None)
+    return b64encode(nonce + ciphertext).decode("utf-8")
+
+
+def _decrypt_totp_secret(encrypted: str) -> str:
+    """Decrypt an AES-256-GCM encrypted TOTP secret."""
+    key = _get_aes_key()
+    aesgcm = AESGCM(key)
+    raw = b64decode(encrypted.encode("utf-8"))
+    nonce = raw[:12]
+    ciphertext = raw[12:]
+    return aesgcm.decrypt(nonce, ciphertext, None).decode("utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Recovery code helpers
+# ---------------------------------------------------------------------------
+
+def _generate_recovery_codes() -> list[str]:
+    """Generate 10 random recovery codes (12 hex chars each)."""
+    return [secrets.token_hex(6) for _ in range(10)]
+
+
+def _hash_recovery_code(code: str) -> str:
+    """Return a bcrypt hash of a recovery code."""
+    import bcrypt as _bcrypt
+    salt = _bcrypt.gensalt()
+    return _bcrypt.hashpw(code.encode("utf-8"), salt).decode("utf-8")
+
+
+def _check_recovery_code(code: str, hashed: str) -> bool:
+    """Constant-time bcrypt comparison."""
+    import bcrypt as _bcrypt
+    try:
+        return _bcrypt.checkpw(code.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Pre-MFA token helpers
+# ---------------------------------------------------------------------------
+
+def _create_pre_mfa_token(user_id: int) -> str:
+    """Issue a short-lived JWT (10 min) with type=pre_mfa. No scheme_id."""
+    return create_access_token(
+        data={"sub": str(user_id), "type": "pre_mfa"},
+        expires_delta=timedelta(minutes=10),
+    )
+
+
+async def _get_user_from_pre_mfa_token(
+    token: Optional[str],
+    db: AsyncSession,
+) -> User:
+    """Validate a pre_mfa token and return the associated User."""
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Pre-MFA token required")
+    payload = decode_token(token)
+    if not payload or payload.get("type") != "pre_mfa":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired pre-MFA token")
+    user_id = payload.get("sub")
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
 
 class SchemeSelectRequest(BaseModel):
     scheme_id: int
@@ -88,6 +194,7 @@ async def build_user_response(user: User, db: AsyncSession) -> UserResponse:
         scheme_code=scheme_code,
         created_at=user.created_at,
         available_schemes=available_schemes,
+        mfa_enabled=user.totp_enabled or False,
     )
 
 
@@ -166,7 +273,7 @@ async def _validate_reset_token(record: PasswordResetToken) -> None:
     if record.status != PasswordResetTokenStatus.PENDING:
         logger.warning(f"Password reset failed: Token status is {record.status}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This password reset link has already been used.")
-    
+
     expires_at = record.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
@@ -176,6 +283,10 @@ async def _validate_reset_token(record: PasswordResetToken) -> None:
         record.status = PasswordResetTokenStatus.EXPIRED
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This password reset link has expired.")
 
+
+# ---------------------------------------------------------------------------
+# Password reset endpoints
+# ---------------------------------------------------------------------------
 
 @router.post("/password/reset-request")
 async def request_password_reset(
@@ -243,7 +354,7 @@ async def reset_password(
     if not user:
         logger.error(f"Password reset failed: User ID {token_record.user_id} not found for valid token")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This password reset link is invalid.")
-    
+
     if not user.is_active:
         logger.warning(f"Password reset failed: User {user.email} is inactive")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This password reset link is invalid.")
@@ -286,7 +397,11 @@ async def reset_password(
     return Token(access_token=access_token, refresh_token=refresh_token)
 
 
-@router.post("/login", response_model=Union[Token, SchemePickerResponse])
+# ---------------------------------------------------------------------------
+# Login
+# ---------------------------------------------------------------------------
+
+@router.post("/login", response_model=Union[Token, SchemePickerResponse, MfaRequiredResponse])
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
@@ -302,6 +417,14 @@ async def login(
         )
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled")
+
+    # MFA gate — if TOTP is enabled, issue a short-lived pre-MFA token
+    if user.totp_enabled:
+        pre_auth_mfa_token = _create_pre_mfa_token(user.id)
+        return MfaRequiredResponse(
+            mfa_required=True,
+            pre_auth_mfa_token=pre_auth_mfa_token,
+        )
 
     memberships_result = await db.execute(
         select(UserSchemeMembership)
@@ -335,6 +458,10 @@ async def login(
     refresh_token = create_refresh_token(data=token_data)
     return Token(access_token=access_token, refresh_token=refresh_token)
 
+
+# ---------------------------------------------------------------------------
+# Scheme selection / switching
+# ---------------------------------------------------------------------------
 
 @router.post("/select-scheme", response_model=Token)
 async def select_scheme(
@@ -380,6 +507,10 @@ async def switch_scheme(
     return Token(access_token=access_token, refresh_token=refresh_token)
 
 
+# ---------------------------------------------------------------------------
+# Token refresh
+# ---------------------------------------------------------------------------
+
 @router.post("/refresh", response_model=Token)
 async def refresh_token(
     body: TokenRefresh,
@@ -406,9 +537,255 @@ async def refresh_token(
     return Token(access_token=access_token, refresh_token=new_refresh)
 
 
+# ---------------------------------------------------------------------------
+# /me
+# ---------------------------------------------------------------------------
+
 @router.get("/me", response_model=UserResponse)
 async def get_me(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await build_user_response(current_user, db)
+
+
+# ---------------------------------------------------------------------------
+# MFA endpoints
+# ---------------------------------------------------------------------------
+
+@router.post("/mfa/setup", response_model=MfaSetupResponse)
+async def mfa_setup(
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a new TOTP secret and return the otpauth:// URI.
+    The secret is NOT persisted here — it is only stored after verify succeeds."""
+    secret = pyotp.random_base32()
+    totp = pyotp.TOTP(secret)
+    otpauth_url = totp.provisioning_uri(
+        name=current_user.email,
+        issuer_name="Clarum",
+    )
+    return MfaSetupResponse(otpauth_url=otpauth_url, secret=secret)
+
+
+@router.post("/mfa/verify", response_model=MfaVerifyResponse)
+async def mfa_verify(
+    payload: MfaVerifyRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Verify the TOTP code against the provided secret, then enable MFA for the user."""
+    totp = pyotp.TOTP(payload.secret)
+    if not totp.verify(payload.code, valid_window=1):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid TOTP code")
+
+    # Encrypt and persist the secret
+    current_user.totp_secret_enc = _encrypt_totp_secret(payload.secret)
+    current_user.totp_enabled = True
+    current_user.totp_fail_count = 0
+    current_user.totp_lockout_until = None
+
+    # Generate recovery codes
+    plaintext_codes = _generate_recovery_codes()
+    hashed_codes = [_hash_recovery_code(c) for c in plaintext_codes]
+    current_user.recovery_codes_hash = json.dumps(hashed_codes)
+
+    audit = AuditLog(
+        user_id=current_user.id,
+        entity_type="user",
+        entity_id=current_user.id,
+        action=MfaAuditAction.ENABLED,
+    )
+    db.add(audit)
+    await db.commit()
+
+    return MfaVerifyResponse(enabled=True, recovery_codes=plaintext_codes)
+
+
+@router.post("/mfa/disable")
+async def mfa_disable(
+    payload: MfaDisableRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Disable MFA. Requires current password and a fresh TOTP code."""
+    if not verify_password(payload.password, current_user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect password")
+
+    if not current_user.totp_enabled or not current_user.totp_secret_enc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="MFA is not enabled")
+
+    secret = _decrypt_totp_secret(current_user.totp_secret_enc)
+    totp = pyotp.TOTP(secret)
+    if not totp.verify(payload.code, valid_window=1):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid TOTP code")
+
+    current_user.totp_secret_enc = None
+    current_user.totp_enabled = False
+    current_user.recovery_codes_hash = None
+    current_user.totp_fail_count = 0
+    current_user.totp_lockout_until = None
+
+    audit = AuditLog(
+        user_id=current_user.id,
+        entity_type="user",
+        entity_id=current_user.id,
+        action=MfaAuditAction.DISABLED,
+    )
+    db.add(audit)
+    await db.commit()
+
+    return {"message": "MFA has been disabled"}
+
+
+@router.post("/mfa/challenge", response_model=MfaChallengeResponse)
+async def mfa_challenge(
+    payload: MfaChallengeRequest,
+    token: Optional[str] = Depends(_pre_mfa_bearer),
+    db: AsyncSession = Depends(get_db),
+):
+    """Validate a TOTP code or recovery code against the pre-MFA token.
+    On success, issues a full JWT pair."""
+    user = await _get_user_from_pre_mfa_token(token, db)
+
+    if not user.totp_enabled or not user.totp_secret_enc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="MFA is not enabled for this account")
+
+    # Check lockout
+    if user.totp_lockout_until:
+        lockout_until = user.totp_lockout_until
+        if lockout_until.tzinfo is None:
+            lockout_until = lockout_until.replace(tzinfo=timezone.utc)
+        if lockout_until > _utc_now():
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail="Account temporarily locked due to too many failed MFA attempts. Try again in 15 minutes.",
+            )
+        # Lockout expired — reset counters
+        user.totp_fail_count = 0
+        user.totp_lockout_until = None
+
+    secret = _decrypt_totp_secret(user.totp_secret_enc)
+    totp = pyotp.TOTP(secret)
+    code_valid = totp.verify(payload.code, valid_window=1)
+
+    # If TOTP fails, try recovery codes
+    recovery_used_index: Optional[int] = None
+    if not code_valid and user.recovery_codes_hash:
+        hashes: list[str] = json.loads(user.recovery_codes_hash)
+        for i, h in enumerate(hashes):
+            if _check_recovery_code(payload.code, h):
+                code_valid = True
+                recovery_used_index = i
+                break
+
+    if not code_valid:
+        user.totp_fail_count = (user.totp_fail_count or 0) + 1
+        if user.totp_fail_count >= 5:
+            user.totp_lockout_until = _utc_now() + timedelta(minutes=15)
+            audit = AuditLog(
+                user_id=user.id,
+                entity_type="user",
+                entity_id=user.id,
+                action=MfaAuditAction.LOCKED_OUT,
+            )
+            db.add(audit)
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail="Account locked due to too many failed MFA attempts. Try again in 15 minutes.",
+            )
+        audit = AuditLog(
+            user_id=user.id,
+            entity_type="user",
+            entity_id=user.id,
+            action=MfaAuditAction.CHALLENGE_FAILED,
+        )
+        db.add(audit)
+        await db.commit()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid MFA code")
+
+    # Success — reset fail counters
+    user.totp_fail_count = 0
+    user.totp_lockout_until = None
+
+    # If a recovery code was used, remove it from the list (one-time use)
+    if recovery_used_index is not None and user.recovery_codes_hash:
+        hashes = json.loads(user.recovery_codes_hash)
+        hashes.pop(recovery_used_index)
+        user.recovery_codes_hash = json.dumps(hashes)
+
+    audit = AuditLog(
+        user_id=user.id,
+        entity_type="user",
+        entity_id=user.id,
+        action=MfaAuditAction.CHALLENGE_SUCCESS,
+    )
+    db.add(audit)
+
+    # Issue full JWT pair — handle multi-scheme users
+    memberships_result = await db.execute(
+        select(UserSchemeMembership)
+        .where(UserSchemeMembership.user_id == user.id)
+        .where(UserSchemeMembership.is_active == True)
+    )
+    memberships = memberships_result.scalars().all()
+
+    if len(memberships) > 1:
+        # Multi-scheme: issue a pre-auth token; client will go through scheme picker
+        scheme_ids = [m.scheme_id for m in memberships]
+        schemes_result = await db.execute(
+            select(Scheme).where(Scheme.id.in_(scheme_ids)).where(Scheme.is_active == True)
+        )
+        schemes = schemes_result.scalars().all()
+        pre_auth_token = create_access_token(
+            data={"sub": str(user.id)},
+            expires_delta=timedelta(minutes=10),
+        )
+        await db.commit()
+        # Return as MfaChallengeResponse but with scheme picker tokens embedded
+        # The frontend checks for requires_scheme_selection in the response
+        # We return a special payload that the frontend auth store handles
+        return {
+            "access_token": pre_auth_token,
+            "refresh_token": "",
+            "token_type": "bearer",
+            "requires_scheme_selection": True,
+            "schemes": [{"id": s.id, "name": s.name, "code": s.code} for s in schemes],
+            "pre_auth_token": pre_auth_token,
+        }
+
+    scheme_id = memberships[0].scheme_id if len(memberships) == 1 else user.scheme_id
+    token_data = {"sub": str(user.id)}
+    if scheme_id is not None:
+        token_data["scheme_id"] = scheme_id
+
+    access_token = create_access_token(data=token_data)
+    refresh_token = create_refresh_token(data=token_data)
+    await db.commit()
+    return MfaChallengeResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/mfa/recovery-codes/regenerate", response_model=MfaRegenerateResponse)
+async def mfa_regenerate_recovery_codes(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Regenerate 10 new recovery codes. Requires MFA to be enabled."""
+    if not current_user.totp_enabled:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="MFA is not enabled")
+
+    plaintext_codes = _generate_recovery_codes()
+    hashed_codes = [_hash_recovery_code(c) for c in plaintext_codes]
+    current_user.recovery_codes_hash = json.dumps(hashed_codes)
+
+    audit = AuditLog(
+        user_id=current_user.id,
+        entity_type="user",
+        entity_id=current_user.id,
+        action=MfaAuditAction.CODES_REGENERATED,
+    )
+    db.add(audit)
+    await db.commit()
+
+    return MfaRegenerateResponse(recovery_codes=plaintext_codes)
