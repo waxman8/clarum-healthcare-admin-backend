@@ -44,12 +44,16 @@ class Member(Base):
     chronic_registrations = sa_relationship("ChronicRegistration", back_populates="member")
     disputes = sa_relationship("Dispute", back_populates="member")
     communication_preferences = sa_relationship("MemberCommunicationPreference", back_populates="member")
+<<<<<<< HEAD
     nominees = sa_relationship(
         "MemberNominee",
         primaryjoin="MemberNominee.member_id == Member.id",
         foreign_keys="[MemberNominee.member_id]",
         back_populates="member"
     )
+=======
+    consents = sa_relationship("MemberConsent", back_populates="member")
+>>>>>>> main
 
 
 class Dependant(Base):
@@ -117,6 +121,7 @@ class MemberCommunicationPreference(Base, MultiTenant, Auditable):
     member = sa_relationship("Member", back_populates="communication_preferences")
 
 
+<<<<<<< HEAD
 class MemberNominee(Base, MultiTenant, Auditable):
     __tablename__ = "member_nominees"
 
@@ -133,3 +138,22 @@ class MemberNominee(Base, MultiTenant, Auditable):
         foreign_keys="[MemberNominee.member_id]",
         back_populates="nominees"
     )
+=======
+class MemberConsent(Base, MultiTenant):
+    """Current POPIA consent state — one row per (member_id, purpose), mutated in place."""
+    __tablename__ = "member_consents"
+    __table_args__ = (
+        UniqueConstraint("member_id", "purpose", name="uq_member_consent_purpose"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=False, index=True)
+    purpose = Column(String(50), ForeignKey("consent_purposes.code"), nullable=False, index=True)
+    consented = Column(Boolean, nullable=False)
+    granted_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    granted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    withdrew_at = Column(DateTime(timezone=True), nullable=True)
+    withdraw_reason = Column(String(500), nullable=True)
+
+    member = sa_relationship("Member", back_populates="consents")
+>>>>>>> main
