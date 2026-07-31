@@ -121,7 +121,6 @@ class MemberCommunicationPreference(Base, MultiTenant, Auditable):
     member = sa_relationship("Member", back_populates="communication_preferences")
 
 
-<<<<<<< HEAD
 class MemberNominee(Base, MultiTenant, Auditable):
     __tablename__ = "member_nominees"
 
@@ -138,7 +137,6 @@ class MemberNominee(Base, MultiTenant, Auditable):
         foreign_keys="[MemberNominee.member_id]",
         back_populates="nominees"
     )
-=======
 class MemberConsent(Base, MultiTenant):
     """Current POPIA consent state — one row per (member_id, purpose), mutated in place."""
     __tablename__ = "member_consents"
@@ -156,4 +154,3 @@ class MemberConsent(Base, MultiTenant):
     withdraw_reason = Column(String(500), nullable=True)
 
     member = sa_relationship("Member", back_populates="consents")
->>>>>>> main
