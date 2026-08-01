@@ -34,4 +34,3 @@ Thumbs.db
 
 # Medshield (Excluded from source control)
 scripts/seed_medshield.py
-/alembic/versions/488d063a0a73_broker_commission_scale.py

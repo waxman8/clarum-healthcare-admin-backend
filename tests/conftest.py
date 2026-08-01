@@ -88,11 +88,6 @@ async def client(test_engine):
             except Exception:
                 await session.rollback()
                 raise
-<<<<<<< HEAD
-            finally:
-                await session.close()
-=======
->>>>>>> main
 
     app.dependency_overrides[get_db] = override_get_db
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
