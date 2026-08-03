@@ -226,3 +226,14 @@ class CopaymentType:
 # ---------------------------------------------------------------------------
 class RegulatoryLimits:
     CMS_REG28_MAX_PMPM_CENTS_EXCL_VAT = 10761  # R107.61
+
+# ---------------------------------------------------------------------------
+# MFA audit actions
+# ---------------------------------------------------------------------------
+class MfaAuditAction:
+    ENABLED = "mfa_enabled"
+    DISABLED = "mfa_disabled"
+    CODES_REGENERATED = "mfa_recovery_codes_regenerated"
+    CHALLENGE_FAILED = "mfa_challenge_failed"
+    CHALLENGE_SUCCESS = "mfa_challenge_success"
+    LOCKED_OUT = "mfa_locked_out"

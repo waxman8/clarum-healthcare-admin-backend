@@ -7,6 +7,7 @@ from app.models.claims import Claim, ClaimLine
 from app.models.underwriting import UnderwritingDecision, MemberConditionExclusion, EnrollmentQuestionnaire
 from app.models.billing import NappiCode, ProviderNetwork, CopaymentRule, ChronicRegistration, Dispute, MemberContribution
 from app.models.recovery import RecoveryCase, RecoveryCaseClaimLink, RecoveryReceipt
+from app.models.intermediaries import Brokerage, Broker, BrokerAppointment, BrokerCommissionScale
 
 __all__ = [
     "User", "Scheme", "AuditLog",
@@ -19,4 +20,5 @@ __all__ = [
     "NappiCode", "ProviderNetwork", "CopaymentRule", "ChronicRegistration", "Dispute",
     "MemberContribution",
     "RecoveryCase", "RecoveryCaseClaimLink", "RecoveryReceipt",
+    "Brokerage", "Broker", "BrokerAppointment", "BrokerCommissionScale",
 ]
