@@ -51,13 +51,14 @@ class BrokerCommissionScale(Base, MultiTenant, Auditable):
 
     id = Column(Integer, primary_key=True, index=True)
     scheme_id = Column(Integer, nullable=False)  # logical FK -> schemes (service-layer enforced)
+    broker_id = Column(Integer, nullable=True)  # logical FK -> brokers
     plan_option_id = Column(Integer, nullable=True)  # logical FK -> plan_options (service-layer enforced)
     member_type = Column(String(17), nullable=False)  # allowed: PRINCIPAL | ADULT_DEPENDANT | CHILD_DEPENDANT
     commission_amount_cents = Column(Integer, nullable=False)
     vat_inclusive = Column(Boolean, nullable=False, default=True)
-    effective_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=True)
-    regulatory_max_cents = Column(Integer, nullable=True)
+    effective_from = Column(Date, nullable=False)
+    effective_to = Column(Date, nullable=True)
+    max_pmpm_cents = Column(Integer, nullable=False)
     notes = Column(Text, nullable=True)
 
 

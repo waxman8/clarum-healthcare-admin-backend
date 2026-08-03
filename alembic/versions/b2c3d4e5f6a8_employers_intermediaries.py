@@ -10,6 +10,7 @@ Create Date: 2026-06-17
 from alembic import op
 import sqlalchemy as sa
 
+
 revision = "b2c3d4e5f6a8"
 down_revision = "a1b2c3d4e5f7"
 branch_labels = None
@@ -101,13 +102,14 @@ def upgrade() -> None:
     op.create_table(
         "broker_commission_scales",
         sa.Column("id", sa.Integer(), primary_key=True, index=True),
+        sa.Column("broker_id", sa.Integer(), nullable=True),
         sa.Column("plan_option_id", sa.Integer(), nullable=True),
         sa.Column("member_type", sa.String(17), nullable=False),
         sa.Column("commission_amount_cents", sa.Integer(), nullable=False),
         sa.Column("vat_inclusive", sa.Boolean(), nullable=False, server_default="1"),
-        sa.Column("effective_date", sa.Date(), nullable=False),
-        sa.Column("end_date", sa.Date(), nullable=True),
-        sa.Column("regulatory_max_cents", sa.Integer(), nullable=True),
+        sa.Column("effective_from", sa.Date(), nullable=False),
+        sa.Column("effective_to", sa.Date(), nullable=True),
+        sa.Column("max_pmpm_cents", sa.Integer(), nullable=False),
         sa.Column("notes", sa.Text(), nullable=True),
         *_mixin_columns_mta(),
     )
