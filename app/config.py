@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
     FRONTEND_URL: str = "http://localhost:5173"
+    # 32-byte hex key for AES-256-GCM encryption of TOTP secrets
+    # Generate with: python -c "import secrets; print(secrets.token_hex(32))"
+    MFA_ENCRYPTION_KEY: str = "0000000000000000000000000000000000000000000000000000000000000000"
 
     model_config = {"env_file": os.getenv("ENV_FILE", ".env")}
 
