@@ -4,7 +4,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.database import Base
-
+from app.models.mixins import MultiTenant, Auditable
 
 class ContributionRate(Base):
     """Monthly contribution rates per plan × member type.
@@ -115,7 +115,7 @@ class SavingsAccount(Base):
     member = relationship("Member", back_populates="savings_account")
 
 
-class CopaymentRule(Base):
+class CopaymentRule(Base, MultiTenant, Auditable):
     """Co-payment rules per scheme, optionally per plan.
     plan_option_id=NULL means the rule applies to ALL plans in the scheme.
     Plan-specific rule takes precedence over scheme-wide NULL rule."""
