@@ -42,6 +42,22 @@ async def test_engine():
     engine = create_async_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Enum-seeded reference data that migrations insert in real environments —
+    # replicate it here since tests build schema via create_all(), not alembic.
+    from app.models.reference import ConsentPurpose
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with factory() as session:
+        session.add_all([
+            ConsentPurpose(code="GENERAL", description="General processing of personal information for scheme administration"),
+            ConsentPurpose(code="MARKETING", description="Marketing and member communications"),
+            ConsentPurpose(code="SHARE_WITH_ADMIN", description="Sharing data with the scheme's administrator"),
+            ConsentPurpose(code="SHARE_WITH_REINSURER", description="Sharing data with reinsurers"),
+            ConsentPurpose(code="MEDICAL_HISTORY_ANALYTICS", description="Use of medical history for analytics"),
+            ConsentPurpose(code="THIRD_PARTY_RESEARCH", description="Sharing data with third parties for research"),
+        ])
+        await session.commit()
+
     yield engine
     await engine.dispose()
 
@@ -49,6 +65,14 @@ async def test_engine():
 @pytest_asyncio.fixture(scope="function")
 async def db_session(test_engine):
     """Function-scoped DB session."""
+    factory = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+    async with factory() as session:
+        yield session
+
+
+@pytest_asyncio.fixture(scope="function")
+async def db(test_engine):
+    """Alias for db_session — used by test_mfa.py and any test that requests 'db'."""
     factory = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
     async with factory() as session:
         yield session
@@ -62,8 +86,16 @@ async def client(test_engine):
     factory = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
 
     async def override_get_db():
+        # Mirror app.database.get_db's commit-on-success semantics so writes
+        # from one request are visible to subsequent requests/sessions —
+        # required for any flow spanning multiple HTTP calls.
         async with factory() as session:
-            yield session
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
 
     app.dependency_overrides[get_db] = override_get_db
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
@@ -226,6 +258,34 @@ async def call_centre_headers(client, seed_call_centre_user):
     resp = await client.post(
         "/api/v1/auth/login",
         data={"username": "callcentre@test.co.za", "password": "Test@1234"},
+    )
+    assert resp.status_code == 200, resp.text
+    token = resp.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture(scope="function")
+async def seed_claims_processor_user(db_session, seed_scheme):
+    from app.models.auth import User
+    user = User(
+        email="claimsprocessor@test.co.za",
+        full_name="Claims Processor",
+        hashed_password=get_password_hash("Test@1234"),
+        role=Role.CLAIMS_PROCESSOR,
+        scheme_id=seed_scheme.id,
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture(scope="function")
+async def claims_processor_headers(client, seed_claims_processor_user):
+    resp = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "claimsprocessor@test.co.za", "password": "Test@1234"},
     )
     assert resp.status_code == 200, resp.text
     token = resp.json()["access_token"]

@@ -52,6 +52,13 @@ class User(Base):
     last_login_at = Column(DateTime(timezone=True), nullable=True)
     must_reset_password = Column(Boolean, default=False, nullable=False)
 
+    # MFA / TOTP columns
+    totp_secret_enc = Column(String(512), nullable=True)       # AES-256-GCM encrypted base32 secret
+    totp_enabled = Column(Boolean, default=False, nullable=False)
+    totp_fail_count = Column(Integer, default=0, nullable=False)
+    totp_lockout_until = Column(DateTime(timezone=True), nullable=True)
+    recovery_codes_hash = Column(Text, nullable=True)          # JSON list of bcrypt hashes
+
     scheme = relationship("Scheme", back_populates="users")
     audit_logs = relationship("AuditLog", back_populates="user")
     scheme_memberships = relationship("UserSchemeMembership", back_populates="user")

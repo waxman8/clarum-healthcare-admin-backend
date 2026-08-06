@@ -14,17 +14,20 @@ from app.models.auth import User, Scheme
 from app.repositories.member_communication_preference_repository import (
     MemberCommunicationPreferenceRepository,
 )
+from app.repositories.member_consent_repository import MemberConsentRepository
 from app.schemas.members import (
     MemberCreate, MemberUpdate, MemberStatusUpdate, MemberResponse,
     DependantCreate, DependantUpdate, DependantResponse, BenefitLimitResponse,
     MemberStatusHistoryResponse, MemberSearchRequest, PaginatedMembersResponse,
     MemberCommunicationPreferenceMatrixResponse, MemberCommunicationPreferenceUpdateRequest,
+    MemberConsentMatrixResponse, MemberConsentActionRequest, ConsentAuditLogEntryRead,
 )
 from app.auth.dependencies import get_current_user, _effective_scheme_id
 from app.models.billing import MemberContribution
 from app.services.member_communication_preference_service import (
     MemberCommunicationPreferenceService,
 )
+from app.services.member_consent_service import MemberConsentService
 
 router = APIRouter(prefix="/api/v1/members", tags=["members"])
 
@@ -107,6 +110,11 @@ async def create_member(
 def _communication_pref_service(db: AsyncSession) -> MemberCommunicationPreferenceService:
     repo = MemberCommunicationPreferenceRepository(db)
     return MemberCommunicationPreferenceService(db, repo)
+
+
+def _consent_service(db: AsyncSession) -> MemberConsentService:
+    repo = MemberConsentRepository(db)
+    return MemberConsentService(db, repo)
 
 
 @router.get("", response_model=PaginatedMembersResponse)
@@ -400,6 +408,53 @@ async def update_member_communication_preferences(
     service = _communication_pref_service(db)
     prefs = await service.update_preferences(member, payload.preferences, current_user)
     return MemberCommunicationPreferenceMatrixResponse(member_id=member.id, preferences=prefs)
+
+
+@router.get(
+    "/{member_id}/consents",
+    response_model=MemberConsentMatrixResponse,
+)
+async def get_member_consents(
+    member_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    member = await get_member_scoped(member_id, db, current_user)
+    service = _consent_service(db)
+    consents = await service.get_matrix(member)
+    return MemberConsentMatrixResponse(member_id=member.id, consents=consents)
+
+
+@router.post(
+    "/{member_id}/consents",
+    response_model=MemberConsentMatrixResponse,
+)
+async def record_member_consent(
+    member_id: int,
+    payload: MemberConsentActionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    member = await get_member_scoped(member_id, db, current_user)
+    service = _consent_service(db)
+    consents = await service.record_consent(
+        member, payload.purpose, payload.consented, payload.reason, current_user
+    )
+    return MemberConsentMatrixResponse(member_id=member.id, consents=consents)
+
+
+@router.get(
+    "/{member_id}/consents/audit-log",
+    response_model=list[ConsentAuditLogEntryRead],
+)
+async def get_member_consent_audit_log(
+    member_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    member = await get_member_scoped(member_id, db, current_user)
+    service = _consent_service(db)
+    return await service.get_audit_log(member)
 
 
 @router.get("/{member_id}/contributions")
