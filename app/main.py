@@ -18,6 +18,7 @@ from app.routers import employer_group, brokerage_fsp, broker_representative
 from app.routers import broker_commission_scale, broker_appointment_allocation
 from app.routers import member_employer_history
 from app.routers import recovery_cases
+from app.routers import beneficiary_nomination
 # Import all models so SQLAlchemy Base.metadata and Alembic see every table
 from app.models import auth as auth_models  # noqa: F401
 from app.models import members as member_models  # noqa: F401
@@ -149,6 +150,7 @@ app.include_router(broker_appointment_allocation.router)
 # Member-Employer link table
 app.include_router(member_employer_history.router)
 app.include_router(recovery_cases.router)
+app.include_router(beneficiary_nomination.router)
 
 
 @app.get("/health")

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
 from app.models.auth import Scheme
-from app.models.members import Member
+from app.models.members import Member, MemberNominee
 from app.models.reference import PlanOption, ICD10Code
 from app.models.providers import Provider
 from app.models.billing import (
@@ -685,6 +685,44 @@ async def seed_disputes(db: AsyncSession, sid: int):
     print(f"  Disputes: seeded {len(disputes)}")
 
 
+async def seed_member_nominees(db: AsyncSession, sid: int):
+    if (await db.execute(select(MemberNominee).where(MemberNominee.scheme_id == sid).limit(1))).scalar():
+        print("  Member Nominees: already seeded")
+        return
+
+    members = [row[0] for row in (await db.execute(
+        select(Member.id).where(Member.scheme_id == sid).limit(10)
+    )).all()]
+
+    if not members:
+        print("  No members — skipping")
+        return
+
+    count = 0
+    for mid in members:
+        # Every member gets 2 nominees (50/50)
+        db.add(MemberNominee(
+            scheme_id=sid, member_id=mid,
+            full_name=f"Nominee A for Member {mid}",
+            id_number=_sa_id(date(1990, 1, 1), "F"),
+            relationship="SPOUSE",
+            allocation_pct=50,
+            created_at=NOW, updated_at=NOW
+        ))
+        db.add(MemberNominee(
+            scheme_id=sid, member_id=mid,
+            full_name=f"Nominee B for Member {mid}",
+            id_number=_sa_id(date(2015, 6, 15), "M"),
+            relationship="CHILD",
+            allocation_pct=50,
+            created_at=NOW, updated_at=NOW
+        ))
+        count += 2
+    
+    await db.flush()
+    print(f"  Member Nominees: seeded {count}")
+
+
 # ---------------------------------------------------------------------------
 # Underwriting Decisions
 # ---------------------------------------------------------------------------
@@ -807,6 +845,10 @@ async def main():
 
         print("Disputes:")
         await seed_disputes(db, sid)
+        print()
+
+        print("Nominees:")
+        await seed_member_nominees(db, sid)
         print()
 
         await db.commit()
