@@ -70,6 +70,14 @@ async def db_session(test_engine):
         yield session
 
 
+@pytest_asyncio.fixture(scope="function")
+async def db(test_engine):
+    """Alias for db_session — used by test_mfa.py and any test that requests 'db'."""
+    factory = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+    async with factory() as session:
+        yield session
+
+
 # ---------------------------------------------------------------------------
 # FastAPI test client wired to the in-memory DB
 # ---------------------------------------------------------------------------
