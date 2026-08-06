@@ -81,3 +81,14 @@ def require_roles(*roles: str):
             )
         return current_user
     return role_checker
+
+
+def check_permissions(required_permissions_roles: list):
+    async def permission_checker(current_user: User = Depends(get_current_user)):
+        if current_user.role not in required_permissions_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied. Insufficient permissions.",
+            )
+        return current_user
+    return permission_checker

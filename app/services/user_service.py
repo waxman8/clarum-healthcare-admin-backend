@@ -9,6 +9,7 @@ from app.repositories.user_repository import UserRepository
 from app.auth.security import get_password_hash
 from app.integrations.registry import get as get_integration
 from app.integrations.contracts import MessagingGateway
+from app.constants import AuditAction
 
 
 class UserService:
@@ -64,9 +65,10 @@ class UserService:
         # Write AuditLog
         audit = AuditLog(
             user_id=current_user.id,
+            scheme_id=current_user.scheme_id,
             entity_type="user",
             entity_id=user.id,
-            action="create",
+            action=AuditAction.CREATE,
             old_value=None,
             new_value=f"email={user.email}, role={user.role}",
             user_role=current_user.role,
@@ -126,9 +128,10 @@ class UserService:
         if payload.role is not None and payload.role != old_role:
             audit = AuditLog(
                 user_id=current_user.id,
+                scheme_id=current_user.scheme_id,
                 entity_type="user",
                 entity_id=user_id,
-                action="role_change",
+                action=AuditAction.ROLE_CHANGE,
                 old_value=old_role,
                 new_value=payload.role,
                 user_role=current_user.role,
@@ -136,9 +139,10 @@ class UserService:
             self.db.add(audit)
 
         if payload.is_active is not None and payload.is_active != old_is_active:
-            action = "activate" if payload.is_active else "deactivate"
+            action = AuditAction.ACTIVATE if payload.is_active else AuditAction.DEACTIVATE
             audit = AuditLog(
                 user_id=current_user.id,
+                scheme_id=current_user.scheme_id,
                 entity_type="user",
                 entity_id=user_id,
                 action=action,
@@ -151,9 +155,10 @@ class UserService:
         if payload.full_name is not None and payload.full_name != old_full_name:
             audit = AuditLog(
                 user_id=current_user.id,
+                scheme_id=current_user.scheme_id,
                 entity_type="user",
                 entity_id=user_id,
-                action="name_change",
+                action=AuditAction.NAME_CHANGE,
                 old_value=old_full_name,
                 new_value=payload.full_name,
                 user_role=current_user.role,
@@ -183,9 +188,10 @@ class UserService:
         # Write AuditLog
         audit = AuditLog(
             user_id=current_user.id,
+            scheme_id=current_user.scheme_id,
             entity_type="user",
             entity_id=user_id,
-            action="deactivate",
+            action=AuditAction.DEACTIVATE,
             old_value="True",
             new_value="False",
             user_role=current_user.role,
@@ -212,9 +218,10 @@ class UserService:
         # Write AuditLog
         audit = AuditLog(
             user_id=current_user.id,
+            scheme_id=current_user.scheme_id,
             entity_type="user",
             entity_id=user_id,
-            action="reset",
+            action=AuditAction.RESET,
             old_value="False",
             new_value="True",
             user_role=current_user.role,

@@ -38,6 +38,7 @@ class Role:
     CAN_OVERRIDE_CLAIM = [SUPER_ADMIN, SCHEME_ADMIN]
     CAN_MANAGE_USERS = [SUPER_ADMIN]
     CAN_MANAGE_RECOVERY_CASES = [SUPER_ADMIN, SCHEME_ADMIN, CLAIMS_PROCESSOR, FINANCE_OFFICER]
+    CAN_VIEW_AUDIT_LOG = [SUPER_ADMIN, SCHEME_ADMIN]
     CAN_RECORD_CONSENT = [SUPER_ADMIN, SCHEME_ADMIN, CALL_CENTRE_AGENT, INFO_OFFICER]
 
 
@@ -222,6 +223,32 @@ class CopaymentType:
 
 
 # ---------------------------------------------------------------------------
+# Audit actions
+# ---------------------------------------------------------------------------
+class AuditAction:
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
+    DELETE = "DELETE"
+    TRANSITION = "TRANSITION"
+    LOGIN = "LOGIN"
+    LOGOUT = "LOGOUT"
+    
+    # Specialized actions
+    ROLE_CHANGE = "ROLE_CHANGE"
+    ACTIVATE = "ACTIVATE"
+    DEACTIVATE = "DEACTIVATE"
+    NAME_CHANGE = "NAME_CHANGE"
+    RESET = "RESET"
+    ADJUDICATE = "ADJUDICATE"
+    OVERRIDE = "OVERRIDE"
+    RESOLVE = "RESOLVE"
+    DECIDE = "DECIDE"
+
+    ALL = [
+        CREATE, UPDATE, DELETE, TRANSITION, LOGIN, LOGOUT,
+        ROLE_CHANGE, ACTIVATE, DEACTIVATE, NAME_CHANGE, RESET,
+        ADJUDICATE, OVERRIDE, RESOLVE, DECIDE
+    ]
 # MFA audit actions
 # ---------------------------------------------------------------------------
 class MfaAuditAction:

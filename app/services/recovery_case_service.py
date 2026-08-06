@@ -113,4 +113,4 @@ class RecoveryCaseService:
         return case
 
     def _audit(self, user: User, case_id: int, action: str, summary: str, reason: Optional[str] = None) -> None:
-        self.repo.db.add(AuditLog(user_id=user.id, entity_type="recovery_case", entity_id=case_id, action=action, new_value=summary, user_role=user.role, reason=reason))
+        self.repo.db.add(AuditLog(user_id=user.id, scheme_id=user.scheme_id, entity_type="recovery_case", entity_id=case_id, action=action, new_value=summary, user_role=user.role, reason=reason))

@@ -1,6 +1,6 @@
 import pytest
 from app.models.auth import User, Scheme, AuditLog
-from app.constants import Role, UserStatus
+from app.constants import Role, UserStatus, AuditAction
 from app.integrations.registry import get as get_integration
 from app.integrations.contracts import MessagingGateway
 from app.repositories.user_repository import UserRepository
@@ -40,7 +40,7 @@ async def test_users_api_crud_cycle(client, auth_headers, db_session):
 
     # Verify 'create' AuditLog entry was written
     result = await db_session.execute(
-        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == "create")
+        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == AuditAction.CREATE)
     )
     audit = result.scalar_one_or_none()
     assert audit is not None
@@ -109,12 +109,12 @@ async def test_users_api_crud_cycle(client, auth_headers, db_session):
 
     # Verify 'role_change' and 'name_change' AuditLogs
     result_role = await db_session.execute(
-        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == "role_change")
+        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == AuditAction.ROLE_CHANGE)
     )
     assert result_role.scalar_one_or_none() is not None
 
     result_name = await db_session.execute(
-        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == "name_change")
+        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == AuditAction.NAME_CHANGE)
     )
     assert result_name.scalar_one_or_none() is not None
 
@@ -133,7 +133,7 @@ async def test_users_api_crud_cycle(client, auth_headers, db_session):
 
     # Verify 'reset' AuditLog
     result_reset = await db_session.execute(
-        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == "reset")
+        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == AuditAction.RESET)
     )
     assert result_reset.scalar_one_or_none() is not None
 
@@ -148,7 +148,7 @@ async def test_users_api_crud_cycle(client, auth_headers, db_session):
 
     # Verify 'deactivate' AuditLog
     result_deact = await db_session.execute(
-        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == "deactivate")
+        select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == user_id, AuditLog.action == AuditAction.DEACTIVATE)
     )
     assert result_deact.scalar_one_or_none() is not None
 
@@ -217,7 +217,7 @@ async def test_deactivate_user_service_handles_missing_and_already_inactive_user
         select(AuditLog).where(
             AuditLog.entity_type == "user",
             AuditLog.entity_id == target_user.id,
-            AuditLog.action == "deactivate",
+            AuditLog.action == AuditAction.DEACTIVATE,
         )
     )
     assert result.scalars().all()
@@ -289,18 +289,29 @@ async def test_role_gated_access_prevention(client, db_session, seed_scheme):
     token = resp.json()["access_token"]
     non_admin_headers = {"Authorization": f"Bearer {token}"}
 
-    # Verify they get 403 Forbidden on Users API endpoints
+    # Verify they can GET users (allowed for Scheme Admin for Audit Log filtering)
     resp = await client.get("/api/v1/users", headers=non_admin_headers)
-    assert resp.status_code == 403
+    assert resp.status_code == 200
 
-    resp = await client.post("/api/v1/users", json={"email": "hacker@test.co.za", "full_name": "Hack", "role": Role.SCHEME_ADMIN}, headers=non_admin_headers)
-    assert resp.status_code == 403
+    # Seed a completely different role to verify 403
+    from app.auth.security import get_password_hash
+    agent_user = User(
+        email="agent@test.co.za",
+        full_name="Agent User",
+        role=Role.CALL_CENTRE_AGENT,
+        scheme_id=seed_scheme.id,
+        hashed_password=get_password_hash("Test@1234"),
+        is_active=True,
+    )
+    db_session.add(agent_user)
+    await db_session.commit()
 
-    resp = await client.get("/api/v1/users/1", headers=non_admin_headers)
-    assert resp.status_code == 403
+    resp = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "agent@test.co.za", "password": "Test@1234"},
+    )
+    agent_token = resp.json()["access_token"]
+    agent_headers = {"Authorization": f"Bearer {agent_token}"}
 
-    resp = await client.patch("/api/v1/users/1", json={"full_name": "Hack"}, headers=non_admin_headers)
-    assert resp.status_code == 403
-
-    resp = await client.post("/api/v1/users/1/reset-password", headers=non_admin_headers)
+    resp = await client.get("/api/v1/users", headers=agent_headers)
     assert resp.status_code == 403

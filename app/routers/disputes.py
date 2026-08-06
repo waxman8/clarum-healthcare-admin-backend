@@ -17,7 +17,7 @@ from app.schemas.disputes import (
     PaginatedDisputesResponse,
 )
 from app.auth.dependencies import get_current_user, _effective_scheme_id
-from app.constants import Role, DisputeStatus
+from app.constants import Role, DisputeStatus, AuditAction
 
 router = APIRouter(prefix="/api/v1/disputes", tags=["disputes"])
 
@@ -79,9 +79,10 @@ async def create_dispute(
 
     audit = AuditLog(
         user_id=current_user.id,
+        scheme_id=scheme_id,
         entity_type="dispute",
         entity_id=dispute.id,
-        action="create",
+        action=AuditAction.CREATE,
         new_value=json.dumps({"dispute_number": dispute_number, "member_id": data.member_id}),
     )
     db.add(audit)
@@ -205,9 +206,10 @@ async def resolve_dispute(
 
     audit = AuditLog(
         user_id=current_user.id,
+        scheme_id=current_user.scheme_id,
         entity_type="dispute",
         entity_id=dispute_id,
-        action="resolve",
+        action=AuditAction.RESOLVE,
         old_value=json.dumps({"status": old_status}),
         new_value=json.dumps({"status": resolution.status, "resolution": resolution.resolution}),
     )
