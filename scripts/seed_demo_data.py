@@ -212,7 +212,7 @@ async def seed_scheme(db: AsyncSession, name, code, reg, domain, palette, plans_
 
     # Users
     password_hash = get_password_hash(f"{code}@1234")
-    roles = ["super_admin", "scheme_admin", "claims_processor", "authorisation_officer"]
+    roles = ["super_admin", "scheme_admin", "claims_processor", "authorisation_officer", "call_centre_agent", "information_officer"]
     for role in roles:
         email = f"{role.replace('_','')}@{domain}"
         db.add(User(

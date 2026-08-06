@@ -17,6 +17,7 @@ class Role:
     FINANCE_OFFICER = "finance_officer"
     FINANCE_ADMIN = "finance_admin"
     CALL_CENTRE_AGENT = "call_centre_agent"
+    INFO_OFFICER = "information_officer"
 
     ALL = [
         SUPER_ADMIN,
@@ -25,6 +26,7 @@ class Role:
         AUTHORISATION_OFFICER,
         FINANCE_OFFICER,
         CALL_CENTRE_AGENT,
+        INFO_OFFICER,
     ]
 
     # Common permission groups
@@ -37,6 +39,7 @@ class Role:
     CAN_MANAGE_USERS = [SUPER_ADMIN]
     CAN_MANAGE_RECOVERY_CASES = [SUPER_ADMIN, SCHEME_ADMIN, CLAIMS_PROCESSOR, FINANCE_OFFICER]
     CAN_VIEW_AUDIT_LOG = [SUPER_ADMIN, SCHEME_ADMIN]
+    CAN_RECORD_CONSENT = [SUPER_ADMIN, SCHEME_ADMIN, CALL_CENTRE_AGENT, INFO_OFFICER]
 
 
 # ---------------------------------------------------------------------------
@@ -246,3 +249,12 @@ class AuditAction:
         ROLE_CHANGE, ACTIVATE, DEACTIVATE, NAME_CHANGE, RESET,
         ADJUDICATE, OVERRIDE, RESOLVE, DECIDE
     ]
+# MFA audit actions
+# ---------------------------------------------------------------------------
+class MfaAuditAction:
+    ENABLED = "mfa_enabled"
+    DISABLED = "mfa_disabled"
+    CODES_REGENERATED = "mfa_recovery_codes_regenerated"
+    CHALLENGE_FAILED = "mfa_challenge_failed"
+    CHALLENGE_SUCCESS = "mfa_challenge_success"
+    LOCKED_OUT = "mfa_locked_out"
